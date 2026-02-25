@@ -1,7 +1,9 @@
 # cluster/local run products
+run/
 runs/
 *.tar
 *.sif
 logs/
 src/
 output/
+.vscode/
