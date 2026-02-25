@@ -7,3 +7,4 @@ logs/
 src/
 output/
 .vscode/
+rivet_out_*/**
