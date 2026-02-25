@@ -1,10 +1,28 @@
 # cluster/local run products
-run/
-runs/
+# ========================
+# Container images
 *.tar
 *.sif
-logs/
+
+# ========================
+# Submodules source code
 src/
+
+# ========================
+# Output directories
+run/
+runs/
 output/
+logs/
+
+# ========================
+# VSCode
 .vscode/
+
+# ========================
+# Rivet output directories
 rivet_out_*/**
+
+# ========================
+# macOS
+.DS_Store
