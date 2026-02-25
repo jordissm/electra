@@ -65,7 +65,7 @@ If you use ELECTRA in your research, please cite:
 
 ## License
 
-ELECTRA is released under the UIUC License. See [LICENSE]() for details.
+ELECTRA is released under the UIUC License. See [LICENSE](LICENSE) for details.
 
 ## Acknowledgements
 
