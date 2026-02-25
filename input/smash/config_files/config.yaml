@@ -1,0 +1,31 @@
+Logging:
+    default: TRACE
+
+General:
+    Modus:         List
+    Time_Step_Mode: None
+    Delta_Time:    1.0
+    End_Time:      300.0
+    Randomseed:    -1
+
+# Collision_Term:
+#     No_Collisions: true
+#     Two_to_One: false
+#     Force_Decays_At_End: false
+#     Decay_Initial_Particles: false
+
+Output:
+    Output_Interval: 10.0
+    Particles:
+        Format:          ["Oscar2013"]
+        Extended: True
+        Only_Final: Yes
+    Rivet:
+        Format: ["YODA"]
+        Ignore_Beams: True
+        Paths:
+            - /SMASH/Rivet_install/share/Rivet
+            - /SMASH/mnt/rivet
+        Analyses:
+            - SMASH_2023_I2693474
+            #- MC_FSPARTICLES

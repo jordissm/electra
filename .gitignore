@@ -1,0 +1,7 @@
+# cluster/local run products
+runs/
+*.tar
+*.sif
+logs/
+src/
+output/

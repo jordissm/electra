@@ -1,0 +1,36 @@
+Logging:
+    default: TRACE
+
+General:
+    Modus:          Collider
+    Time_Step_Mode: Fixed
+    End_Time:       250.0
+    Randomseed:     -1
+    Nevents:        50
+    Cross_Section_Scaling_Factor:
+        Type: File
+        Path: /SMASH/mnt/input/xsec_scaling_factor_profiles/0d0.dat
+
+Output:
+    Output_Interval: 50.0
+    Particles:
+        Format:          ["Oscar2013"]
+        Extended: True
+    Rivet:
+        Format: ["YODA"]
+        Ignore_Beams: True
+        Paths:
+            - /SMASH/mnt/rivet
+        Analyses:
+            - SMASH_2025_PROTON_DNDY
+
+
+Modi:
+    Collider:
+        Projectile:
+            Particles: {2212: 1} #p
+        Target:
+            Particles: {2212: 1} #p
+
+        Sqrtsnn: 17.27
+        Fermi_Motion: "frozen"

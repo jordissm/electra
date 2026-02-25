@@ -1,0 +1,19 @@
+Logging:
+    default: TRACE
+
+General:
+    Modus:          List
+    Time_Step_Mode: Fixed
+    End_Time:       250.0
+    Randomseed:     -1
+    Cross_Section_Scaling_Factor:
+        Type: File
+        Path: /SMASH/mnt/input/smash/xsec_scaling_factor_profiles/p_000000.dat
+
+Output:
+    Output_Interval: 50.0
+    Particles:
+        Format: ["HepMC_asciiv3"]
+        Extended: True
+    Collisions:
+        Format: ["HepMC_asciiv3"]

@@ -1,0 +1,476 @@
+#!/usr/bin/env python3
+"""
+ELECTRA: eHIJING → SMASH orchestration CLI
+
+Design principles:
+- Filesystem is the database
+- Manifest defines the contract between stages
+- Same commands work locally and on SLURM
+- One task = one (event_id, replica_id)
+"""
+
+import argparse
+import json
+import os
+import subprocess
+import sys
+import shutil
+import hashlib
+from pathlib import Path
+from concurrent.futures import ProcessPoolExecutor, as_completed
+
+# -----------------------------------------------------------------------------
+# Utilities
+# -----------------------------------------------------------------------------
+
+
+def mkdir(p: Path):
+    p.mkdir(parents=True, exist_ok=True)
+
+
+def atomic_done_marker(path: Path):
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text("ok\n")
+    tmp.rename(path)
+
+
+def hash_seed(*items, bits=63):
+    h = hashlib.sha256()
+    for it in items:
+        h.update(str(it).encode())
+    return int(h.hexdigest(), 16) & ((1 << bits) - 1)
+
+
+def run(cmd, cwd=None, env=None):
+    print(">>", " ".join(cmd))
+    subprocess.check_call(cmd, cwd=cwd, env=env)
+
+
+def load_profiles_jsonl(index_path: Path):
+    """
+    Load profiles from a JSONL index.
+    Each line is a JSON object with at least:
+      - "id": a unique profile id (string)
+      - "relpath": sharded relative path to the file (string), e.g. "ab/ab12cd.dat"
+    Optional:
+      - "sha256": content hash
+      - "meta": arbitrary metadata
+    """
+    profiles = []
+    with open(index_path, "r") as f:
+        for lineno, line in enumerate(f, 1):
+            line = line.strip()
+            if not line:
+                continue
+            rec = json.loads(line)
+            if "id" not in rec:
+                raise ValueError(f"{index_path}:{lineno} missing required key 'id'")
+            if "relpath" not in rec:
+                raise ValueError(
+                    f"{index_path}:{lineno} missing required key 'relpath'"
+                )
+            profiles.append(rec)
+    return profiles
+
+
+def deduce_profiles_root_from_index(index_path: Path) -> Path:
+    """
+    With the new sharder behavior:
+      out_root/profiles.jsonl
+      out_root/<shards...>/<files...>
+    so profiles_root is always the parent directory of the index file.
+    """
+    return index_path.parent.resolve()
+
+
+def resolve_profile_path(profiles_root: Path, profile_rec: dict) -> Path:
+    """
+    Turn a profile record into an absolute file path.
+    profile_rec["relpath"] is assumed already sharded (e.g. "ab/xyz.dat").
+    """
+    return (profiles_root / profile_rec["relpath"]).resolve()
+
+
+def stage_tabulations(out_dir: Path, cache_tabulations: Path, mode: str = "auto"):
+    """
+    Ensure out_dir/tabulations exists, populated from cache_tabulations.
+
+    mode:
+      - "symlink": always symlink
+      - "copy": always copy
+      - "auto": try symlink, fall back to copy
+    """
+    print(f"Staging tabulations into {out_dir} from cache: {cache_tabulations}")
+
+    if cache_tabulations is None:
+        return
+
+    cache_tabulations = Path(cache_tabulations).resolve()
+    if not cache_tabulations.exists():
+        raise FileNotFoundError(
+            f"Tabulations cache does not exist: {cache_tabulations}"
+        )
+    if not cache_tabulations.is_dir():
+        raise NotADirectoryError(
+            f"Tabulations cache is not a directory: {cache_tabulations}"
+        )
+
+    dst = (out_dir / "tabulations").resolve()
+
+    # If already present, do nothing (keeps idempotency)
+    if dst.exists() or dst.is_symlink():
+        return
+
+    if mode not in {"auto", "symlink", "copy"}:
+        raise ValueError(f"Invalid tabulations mode: {mode}")
+
+    def _do_symlink():
+        # Link out_dir/tabulations -> cache_tabulations
+        dst.symlink_to(cache_tabulations, target_is_directory=True)
+
+    def _do_copy():
+        # Copy entire directory tree to out_dir/tabulations
+        shutil.copytree(cache_tabulations, dst, dirs_exist_ok=False)
+
+    if mode == "symlink":
+        _do_symlink()
+        return
+
+    if mode == "copy":
+        _do_copy()
+        return
+
+    # auto
+    try:
+        _do_symlink()
+    except OSError:
+        _do_copy()
+
+
+# -----------------------------------------------------------------------------
+# Paths / layout
+# -----------------------------------------------------------------------------
+
+
+def run_layout(run_dir: Path):
+    return {
+        "run": run_dir,
+        "manifest": run_dir / "manifest.jsonl",
+        "ehijing_events": run_dir / "ehijing" / "events",
+        "ehijing_logs": run_dir / "ehijing" / "logs",
+        "smash": run_dir / "smash",
+        "meta": run_dir / "metadata",
+        "profiles_root": run_dir / "profiles",
+        "profiles_index": (run_dir / "profiles" / "profiles.jsonl"),
+    }
+
+
+# -----------------------------------------------------------------------------
+# Stage A: eHIJING
+# -----------------------------------------------------------------------------
+
+
+def ehijing_task(run_dir: Path, event_id: int, base_seed: int):
+    layout = run_layout(run_dir)
+    mkdir(layout["ehijing_events"])
+    mkdir(layout["ehijing_logs"])
+
+    out_evt = layout["ehijing_events"] / f"evt_{event_id:06d}.oscar"
+    done = out_evt.with_suffix(".done")
+
+    if done.exists():
+        return
+
+    seed = hash_seed(base_seed, event_id)
+
+    cmd = [
+        "ehijing",
+        "--seed",
+        str(seed),
+        "--output",
+        str(out_evt),
+    ]
+
+    run(cmd)
+    atomic_done_marker(done)
+
+    record = {
+        "event_id": event_id,
+        "ehijing_seed": seed,
+        "path": str(out_evt),
+    }
+
+    with open(layout["manifest"], "a") as f:
+        f.write(json.dumps(record) + "\n")
+
+
+# -----------------------------------------------------------------------------
+# Stage B: SMASH
+# -----------------------------------------------------------------------------
+
+
+def smash_physical_event_task(
+    run_dir: Path,
+    event_file: Path,
+    profile_rec: dict,
+    profiles_root: Path,
+    nreplicas: int,
+    base_seed: int,
+    tabulations_cache: Path = None,
+    tabulations_mode: str = "auto",
+):
+    """
+    Run SMASH for one physical eHIJING event file and one xsec profile.
+    SMASH produces nreplicas stochastic replays internally.
+
+    output:
+      run/smash/<evt_tag>/profile_<profile_id>/
+    """
+    layout = run_layout(run_dir)
+
+    event_tag = event_file.stem  # "evt_000123"
+    profile_id = str(profile_rec["id"])
+
+    out_dir = layout["smash"] / event_tag / f"profile_{profile_id}"
+    done = out_dir / ".done"
+    if done.exists():
+        return
+
+    mkdir(out_dir)
+
+    # Stage cached tabulations into this SMASH output directory
+    stage_tabulations(
+        layout["smash"] / event_tag, tabulations_cache, mode=tabulations_mode
+    )
+
+    cfg = (run_dir / "config.yaml").resolve()
+    if not cfg.exists():
+        raise FileNotFoundError(f"Missing universal SMASH config: {cfg}")
+
+    # Resolve sharded profile path
+    profile_path = resolve_profile_path(profiles_root, profile_rec)
+    if not profile_path.exists():
+        raise FileNotFoundError(
+            f"Missing profile file for {profile_id}: {profile_path}"
+        )
+
+    # Deterministic seed per (physical event, profile)
+    smash_seed = hash_seed(base_seed, event_tag)
+
+    cmd = [
+        "smash",
+        "-i",
+        str(cfg),
+        "-m",
+        "List",
+        "-f",
+        # Nevents is your "replicas per physical event" inside SMASH
+        "-c",
+        f"General: {{ Randomseed: {smash_seed}, Nevents: {nreplicas} }}",
+        # Point to the input OSCAR file
+        "-c",
+        (
+            "Modi: { List: { "
+            f"File_Directory: '{event_file.parent}', "
+            f"Filename: '{event_file.name}' "
+            "} }"
+        ),
+        # INJECT PROFILE HERE (override config.yaml)
+        "-c",
+        (
+            "General: { Cross_Section_Scaling_Factor: { "
+            "Type: File, "
+            f"Path: '{profile_path}' "
+            "} }"
+        ),
+        "-o",
+        str(out_dir),
+    ]
+
+    run(cmd, cwd=out_dir)
+    atomic_done_marker(done)
+
+
+# -----------------------------------------------------------------------------
+# Local execution helpers
+# -----------------------------------------------------------------------------
+
+
+def run_local(tasks, jobs):
+    if jobs == 1:
+        for t in tasks:
+            t()
+    else:
+        with ProcessPoolExecutor(max_workers=jobs) as exe:
+            futures = [exe.submit(t) for t in tasks]
+            for f in as_completed(futures):
+                f.result()
+
+
+# -----------------------------------------------------------------------------
+# CLI
+# -----------------------------------------------------------------------------
+
+
+def cmd_ehijing(args):
+    run_dir = Path(args.run_dir).resolve()
+    layout = run_layout(run_dir)
+    mkdir(run_dir)
+
+    base_seed = args.seed
+
+    tasks = [
+        lambda eid=eid: ehijing_task(run_dir, eid, base_seed)
+        for eid in range(args.nevents)
+    ]
+
+    run_local(tasks, args.jobs)
+
+
+def cmd_smash(args):
+    run_dir = Path(args.run_dir).resolve()
+    mkdir(run_dir)
+
+    layout = run_layout(run_dir)
+
+    # eHIJING produces one OSCAR per physical event
+    events_dir = layout["ehijing_events"]
+    if not events_dir.exists():
+        raise FileNotFoundError(f"Missing eHIJING events directory: {events_dir}")
+
+    event_files = sorted(events_dir.glob("evt_*.oscar"))
+    if not event_files:
+        raise FileNotFoundError(f"No per-event OSCAR files found in: {events_dir}")
+
+    # Interpret --nevents as "how many physical events to process"
+    event_files = event_files[: args.nevents]
+
+    # Profiles index + root
+    profiles_index = Path(args.profiles_index).resolve()
+    if not profiles_index.exists():
+        raise FileNotFoundError(f"Missing profiles index: {profiles_index}")
+
+    profiles_root = deduce_profiles_root_from_index(profiles_index)
+    if not profiles_root.exists():
+        raise FileNotFoundError(
+            f"Deduced profiles root does not exist: {profiles_root}"
+        )
+    if not profiles_root.is_dir():
+        raise NotADirectoryError(
+            f"Deduced profiles root is not a directory: {profiles_root}"
+        )
+
+    profiles = load_profiles_jsonl(profiles_index)
+    if not profiles:
+        raise FileNotFoundError(f"No profiles found in: {profiles_index}")
+
+    # Optionally limit how many profiles you run per event
+    if args.nprofiles is not None:
+        profiles = profiles[: args.nprofiles]
+
+    tasks = []
+    for ev in event_files:
+        for prof in profiles:
+            tasks.append(
+                (
+                    lambda ev=ev, prof=prof: smash_physical_event_task(
+                        run_dir=run_dir,
+                        event_file=ev,
+                        profile_rec=prof,
+                        profiles_root=profiles_root,
+                        nreplicas=args.nreplicas,
+                        base_seed=args.seed,
+                        tabulations_cache=args.tabulations_cache,
+                        tabulations_mode=args.tabulations_mode,
+                    )
+                )
+            )
+
+    run_local(tasks, args.jobs)
+
+
+def cmd_pipeline(args):
+    cmd_ehijing(args)
+    cmd_smash(args)
+
+
+def main():
+    p = argparse.ArgumentParser(prog="electra")
+    sp = p.add_subparsers(dest="cmd", required=True)
+
+    # eHIJING
+    pe = sp.add_parser("ehijing")
+    spe = pe.add_subparsers(dest="sub", required=True)
+    per = spe.add_parser("run")
+    per.add_argument("--run-dir", required=True)
+    per.add_argument("--nevents", type=int, required=True)
+    per.add_argument("--seed", type=int, default=12345)
+    per.add_argument("--jobs", type=int, default=1)
+    per.set_defaults(func=cmd_ehijing)
+
+    # SMASH
+    ps = sp.add_parser("smash")
+    sps = ps.add_subparsers(dest="sub", required=True)
+    psr = sps.add_parser("run")
+    psr.add_argument("--run-dir", required=True)
+    psr.add_argument("--nevents", type=int, required=True)
+    psr.add_argument("--nreplicas", type=int, required=True)
+    psr.add_argument("--seed", type=int, default=98765)
+    psr.add_argument("--jobs", type=int, default=1)
+    psr.add_argument("--profiles-index", required=True, help="Path to profiles.jsonl")
+    psr.add_argument(
+        "--nprofiles",
+        type=int,
+        default=None,
+        help="Optional: limit number of profiles to run per event",
+    )
+    psr.add_argument(
+        "--tabulations-cache",
+        default=None,
+        help="Path to cached SMASH 'tabulations' directory to stage into each output dir",
+    )
+    psr.add_argument(
+        "--tabulations-mode",
+        choices=["auto", "symlink", "copy"],
+        default="auto",
+        help="How to stage tabulations: auto tries symlink then copies; symlink forces link; copy forces copy",
+    )
+
+    psr.set_defaults(func=cmd_smash)
+
+    # pipeline
+    pp = sp.add_parser("pipeline")
+    spp = pp.add_subparsers(dest="sub", required=True)
+    ppr = spp.add_parser("run")
+    ppr.add_argument("--run-dir", required=True)
+    ppr.add_argument("--nevents", type=int, required=True)
+    ppr.add_argument("--nreplicas", type=int, required=True)
+    ppr.add_argument("--seed", type=int, default=12345)
+    ppr.add_argument("--jobs", type=int, default=1)
+    ppr.add_argument("--profiles-index", required=True, help="Path to profiles.jsonl")
+    ppr.add_argument(
+        "--nprofiles",
+        type=int,
+        default=None,
+        help="Optional: limit number of profiles to run per event",
+    )
+    ppr.add_argument(
+        "--tabulations-cache",
+        default=None,
+        help="Path to cached SMASH 'tabulations' directory to stage into each output dir",
+    )
+    ppr.add_argument(
+        "--tabulations-mode",
+        choices=["auto", "symlink", "copy"],
+        default="auto",
+        help="How to stage tabulations: auto tries symlink then copies; symlink forces link; copy forces copy",
+    )
+
+    ppr.set_defaults(func=cmd_pipeline)
+
+    args = p.parse_args()
+    args.func(args)
+
+
+if __name__ == "__main__":
+    main()
