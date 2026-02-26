@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 ELECTRA: eHIJING → SMASH orchestration CLI
 
@@ -9,55 +8,61 @@ Design principles:
 - One task = one (event_id, replica_id)
 """
 
+from __future__ import annotations
+
 import argparse
-import json
-import os
-import subprocess
-import sys
-import shutil
 import hashlib
-from pathlib import Path
+import json
+import shutil
+import subprocess
 from concurrent.futures import ProcessPoolExecutor, as_completed
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional
+
 
 # -----------------------------------------------------------------------------
 # Utilities
 # -----------------------------------------------------------------------------
 
 
-def mkdir(p: Path):
+def mkdir(p: Path) -> None:
     p.mkdir(parents=True, exist_ok=True)
 
 
-def atomic_done_marker(path: Path):
+def atomic_done_marker(path: Path) -> None:
     tmp = path.with_suffix(".tmp")
-    tmp.write_text("ok\n")
+    tmp.write_text("ok\n", encoding="utf-8")
     tmp.rename(path)
 
 
-def hash_seed(*items, bits=63):
+def hash_seed(*items: Any, bits: int = 63) -> int:
     h = hashlib.sha256()
     for it in items:
         h.update(str(it).encode())
     return int(h.hexdigest(), 16) & ((1 << bits) - 1)
 
 
-def run(cmd, cwd=None, env=None):
+def run(
+    cmd: List[str], cwd: Optional[Path] = None, env: Optional[Dict[str, str]] = None
+) -> None:
     print(">>", " ".join(cmd))
-    subprocess.check_call(cmd, cwd=cwd, env=env)
+    subprocess.check_call(cmd, cwd=str(cwd) if cwd is not None else None, env=env)
 
 
-def load_profiles_jsonl(index_path: Path):
+def load_profiles_jsonl(index_path: Path) -> List[Dict[str, Any]]:
     """
     Load profiles from a JSONL index.
+
     Each line is a JSON object with at least:
       - "id": a unique profile id (string)
       - "relpath": sharded relative path to the file (string), e.g. "ab/ab12cd.dat"
+
     Optional:
       - "sha256": content hash
       - "meta": arbitrary metadata
     """
-    profiles = []
-    with open(index_path, "r") as f:
+    profiles: List[Dict[str, Any]] = []
+    with index_path.open("r", encoding="utf-8") as f:
         for lineno, line in enumerate(f, 1):
             line = line.strip()
             if not line:
@@ -75,7 +80,7 @@ def load_profiles_jsonl(index_path: Path):
 
 def deduce_profiles_root_from_index(index_path: Path) -> Path:
     """
-    With the new sharder behavior:
+    With the sharder behavior:
       out_root/profiles.jsonl
       out_root/<shards...>/<files...>
     so profiles_root is always the parent directory of the index file.
@@ -83,15 +88,17 @@ def deduce_profiles_root_from_index(index_path: Path) -> Path:
     return index_path.parent.resolve()
 
 
-def resolve_profile_path(profiles_root: Path, profile_rec: dict) -> Path:
+def resolve_profile_path(profiles_root: Path, profile_rec: Dict[str, Any]) -> Path:
     """
     Turn a profile record into an absolute file path.
     profile_rec["relpath"] is assumed already sharded (e.g. "ab/xyz.dat").
     """
-    return (profiles_root / profile_rec["relpath"]).resolve()
+    return (profiles_root / str(profile_rec["relpath"])).resolve()
 
 
-def stage_tabulations(out_dir: Path, cache_tabulations: Path, mode: str = "auto"):
+def stage_tabulations(
+    out_dir: Path, cache_tabulations: Optional[Path], mode: str = "auto"
+) -> None:
     """
     Ensure out_dir/tabulations exists, populated from cache_tabulations.
 
@@ -100,10 +107,10 @@ def stage_tabulations(out_dir: Path, cache_tabulations: Path, mode: str = "auto"
       - "copy": always copy
       - "auto": try symlink, fall back to copy
     """
-    print(f"Staging tabulations into {out_dir} from cache: {cache_tabulations}")
-
     if cache_tabulations is None:
         return
+
+    print(f"Staging tabulations into {out_dir} from cache: {cache_tabulations}")
 
     cache_tabulations = Path(cache_tabulations).resolve()
     if not cache_tabulations.exists():
@@ -124,18 +131,15 @@ def stage_tabulations(out_dir: Path, cache_tabulations: Path, mode: str = "auto"
     if mode not in {"auto", "symlink", "copy"}:
         raise ValueError(f"Invalid tabulations mode: {mode}")
 
-    def _do_symlink():
-        # Link out_dir/tabulations -> cache_tabulations
+    def _do_symlink() -> None:
         dst.symlink_to(cache_tabulations, target_is_directory=True)
 
-    def _do_copy():
-        # Copy entire directory tree to out_dir/tabulations
+    def _do_copy() -> None:
         shutil.copytree(cache_tabulations, dst, dirs_exist_ok=False)
 
     if mode == "symlink":
         _do_symlink()
         return
-
     if mode == "copy":
         _do_copy()
         return
@@ -152,7 +156,7 @@ def stage_tabulations(out_dir: Path, cache_tabulations: Path, mode: str = "auto"
 # -----------------------------------------------------------------------------
 
 
-def run_layout(run_dir: Path):
+def run_layout(run_dir: Path) -> Dict[str, Path]:
     return {
         "run": run_dir,
         "manifest": run_dir / "manifest.jsonl",
@@ -170,7 +174,7 @@ def run_layout(run_dir: Path):
 # -----------------------------------------------------------------------------
 
 
-def ehijing_task(run_dir: Path, event_id: int, base_seed: int):
+def ehijing_task(run_dir: Path, event_id: int, base_seed: int) -> None:
     layout = run_layout(run_dir)
     mkdir(layout["ehijing_events"])
     mkdir(layout["ehijing_logs"])
@@ -200,7 +204,7 @@ def ehijing_task(run_dir: Path, event_id: int, base_seed: int):
         "path": str(out_evt),
     }
 
-    with open(layout["manifest"], "a") as f:
+    with layout["manifest"].open("a", encoding="utf-8") as f:
         f.write(json.dumps(record) + "\n")
 
 
@@ -210,15 +214,16 @@ def ehijing_task(run_dir: Path, event_id: int, base_seed: int):
 
 
 def smash_physical_event_task(
+    *,
     run_dir: Path,
     event_file: Path,
-    profile_rec: dict,
+    profile_rec: Dict[str, Any],
     profiles_root: Path,
     nreplicas: int,
     base_seed: int,
-    tabulations_cache: Path = None,
+    tabulations_cache: Optional[Path] = None,
     tabulations_mode: str = "auto",
-):
+) -> None:
     """
     Run SMASH for one physical eHIJING event file and one xsec profile.
     SMASH produces nreplicas stochastic replays internally.
@@ -247,7 +252,6 @@ def smash_physical_event_task(
     if not cfg.exists():
         raise FileNotFoundError(f"Missing universal SMASH config: {cfg}")
 
-    # Resolve sharded profile path
     profile_path = resolve_profile_path(profiles_root, profile_rec)
     if not profile_path.exists():
         raise FileNotFoundError(
@@ -264,10 +268,8 @@ def smash_physical_event_task(
         "-m",
         "List",
         "-f",
-        # Nevents is your "replicas per physical event" inside SMASH
         "-c",
         f"General: {{ Randomseed: {smash_seed}, Nevents: {nreplicas} }}",
-        # Point to the input OSCAR file
         "-c",
         (
             "Modi: { List: { "
@@ -275,7 +277,6 @@ def smash_physical_event_task(
             f"Filename: '{event_file.name}' "
             "} }"
         ),
-        # INJECT PROFILE HERE (override config.yaml)
         "-c",
         (
             "General: { Cross_Section_Scaling_Factor: { "
@@ -296,44 +297,45 @@ def smash_physical_event_task(
 # -----------------------------------------------------------------------------
 
 
-def run_local(tasks, jobs):
+TaskFn = Callable[[], None]
+
+
+def run_local(tasks: List[TaskFn], jobs: int) -> None:
     if jobs == 1:
         for t in tasks:
             t()
-    else:
-        with ProcessPoolExecutor(max_workers=jobs) as exe:
-            futures = [exe.submit(t) for t in tasks]
-            for f in as_completed(futures):
-                f.result()
+        return
+
+    with ProcessPoolExecutor(max_workers=jobs) as exe:
+        futures = [exe.submit(t) for t in tasks]
+        for f in as_completed(futures):
+            f.result()
 
 
 # -----------------------------------------------------------------------------
-# CLI
+# Command handlers
 # -----------------------------------------------------------------------------
 
 
-def cmd_ehijing(args):
+def cmd_ehijing(args: argparse.Namespace) -> None:
     run_dir = Path(args.run_dir).resolve()
-    layout = run_layout(run_dir)
     mkdir(run_dir)
 
-    base_seed = args.seed
+    base_seed = int(args.seed)
 
-    tasks = [
-        lambda eid=eid: ehijing_task(run_dir, eid, base_seed)
-        for eid in range(args.nevents)
+    tasks: List[TaskFn] = [
+        (lambda eid=eid: ehijing_task(run_dir, eid, base_seed))
+        for eid in range(int(args.nevents))
     ]
+    run_local(tasks, int(args.jobs))
 
-    run_local(tasks, args.jobs)
 
-
-def cmd_smash(args):
+def cmd_smash(args: argparse.Namespace) -> None:
     run_dir = Path(args.run_dir).resolve()
     mkdir(run_dir)
 
     layout = run_layout(run_dir)
 
-    # eHIJING produces one OSCAR per physical event
     events_dir = layout["ehijing_events"]
     if not events_dir.exists():
         raise FileNotFoundError(f"Missing eHIJING events directory: {events_dir}")
@@ -342,10 +344,8 @@ def cmd_smash(args):
     if not event_files:
         raise FileNotFoundError(f"No per-event OSCAR files found in: {events_dir}")
 
-    # Interpret --nevents as "how many physical events to process"
-    event_files = event_files[: args.nevents]
+    event_files = event_files[: int(args.nevents)]
 
-    # Profiles index + root
     profiles_index = Path(args.profiles_index).resolve()
     if not profiles_index.exists():
         raise FileNotFoundError(f"Missing profiles index: {profiles_index}")
@@ -364,37 +364,43 @@ def cmd_smash(args):
     if not profiles:
         raise FileNotFoundError(f"No profiles found in: {profiles_index}")
 
-    # Optionally limit how many profiles you run per event
     if args.nprofiles is not None:
-        profiles = profiles[: args.nprofiles]
+        profiles = profiles[: int(args.nprofiles)]
 
-    tasks = []
+    tab_cache = (
+        Path(args.tabulations_cache).resolve() if args.tabulations_cache else None
+    )
+
+    tasks: List[TaskFn] = []
     for ev in event_files:
         for prof in profiles:
             tasks.append(
-                (
-                    lambda ev=ev, prof=prof: smash_physical_event_task(
-                        run_dir=run_dir,
-                        event_file=ev,
-                        profile_rec=prof,
-                        profiles_root=profiles_root,
-                        nreplicas=args.nreplicas,
-                        base_seed=args.seed,
-                        tabulations_cache=args.tabulations_cache,
-                        tabulations_mode=args.tabulations_mode,
-                    )
+                lambda ev=ev, prof=prof: smash_physical_event_task(
+                    run_dir=run_dir,
+                    event_file=ev,
+                    profile_rec=prof,
+                    profiles_root=profiles_root,
+                    nreplicas=int(args.nreplicas),
+                    base_seed=int(args.seed),
+                    tabulations_cache=tab_cache,
+                    tabulations_mode=str(args.tabulations_mode),
                 )
             )
 
-    run_local(tasks, args.jobs)
+    run_local(tasks, int(args.jobs))
 
 
-def cmd_pipeline(args):
+def cmd_pipeline(args: argparse.Namespace) -> None:
     cmd_ehijing(args)
     cmd_smash(args)
 
 
-def main():
+# -----------------------------------------------------------------------------
+# CLI wiring
+# -----------------------------------------------------------------------------
+
+
+def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="electra")
     sp = p.add_subparsers(dest="cmd", required=True)
 
@@ -435,7 +441,6 @@ def main():
         default="auto",
         help="How to stage tabulations: auto tries symlink then copies; symlink forces link; copy forces copy",
     )
-
     psr.set_defaults(func=cmd_smash)
 
     # pipeline
@@ -465,12 +470,17 @@ def main():
         default="auto",
         help="How to stage tabulations: auto tries symlink then copies; symlink forces link; copy forces copy",
     )
-
     ppr.set_defaults(func=cmd_pipeline)
 
-    args = p.parse_args()
+    return p
+
+
+def main(argv: Optional[List[str]] = None) -> int:
+    parser = build_parser()
+    args = parser.parse_args(argv)
     args.func(args)
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

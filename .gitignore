@@ -16,6 +16,10 @@ output/
 logs/
 
 # ========================
+# Python
+python/electra.egg-info
+
+# ========================
 # VSCode
 .vscode/
 
@@ -26,3 +30,12 @@ rivet_out_*/**
 # ========================
 # macOS
 .DS_Store
+
+# ========================
+# Build files
+electra-shell
+
+# ========================
+old_electra_script
+modified_files/
+

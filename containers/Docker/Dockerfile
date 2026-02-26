@@ -1,11 +1,6 @@
 # syntax=docker/dockerfile:1.4
 
-# Set the proper general cpu family architecture flag.
-# Please, for more information refer to the documention of your compiler.
-
 ARG TARGET_ARCHITECTURE="x86-64"
-
-# Declare all together the versions of the going to be installed codebases
 
 ARG ROOT_VERSION="6.34.00"
 ARG HEPMC_VERSION="3.2.6"
@@ -19,12 +14,8 @@ ARG JULIA_VERSION="1.9.3"
 ARG YQ_VERSION="4.40.3"
 
 ARG PROJECT_DIR="/opt/electra"
-ARG MNT_DIR="${PROJECT_DIR}/mnt"
+ARG MNT_DIR="/workspace"
 ARG HEPMC_INSTALL="${PROJECT_DIR}/hepmc3_install"
-
-# Set PATH-like environment variables to comply with Docker suggestion to always define these
-# before using them (otherwise an UndefinedVar warning is given by Docker at build time). Note
-# that the base image already define LD_LIBRARY_PATH and we clearly do not want to reset this one.
 
 ARG PYTHONPATH=''
 ARG MANPATH=''
@@ -37,26 +28,19 @@ ARG TEXMFCNF=''
 ARG TEXINPUTS=''
 ARG LATEXINPUTS=''
 
-# Set cpu architecture flags for compilation
-# ARG sets these flags as temporary environment variables that are used by cmake and by other tools
+# ARG CFLAGS="-O3 -march=${TARGET_ARCHITECTURE}"
+# ARG CPPFLAGS="${CFLAGS} -std=c++17"
+# ARG CXXFLAGS=${CPPFLAGS}
 
-ARG CFLAGS="-O3 -march=${TARGET_ARCHITECTURE}"
-ARG CPPFLAGS="${CFLAGS} -std=c++17"
-ARG CXXFLAGS=${CPPFLAGS}
-
-
-# Import the base smash Docker container image.
-# Adjust the address as needed. In particular, be sure to use a base image compatible with your cpu.
-# The official Docker images are prepared for a generic Intel/AMD x86-64 cpu.
+ARG OPTFLAGS="-O3"
+ARG ARCHFLAGS=""
+ENV CFLAGS="${OPTFLAGS} ${ARCHFLAGS}" \
+  CXXFLAGS="${OPTFLAGS} ${ARCHFLAGS} -std=c++17" \
+  CPPFLAGS="${OPTFLAGS} ${ARCHFLAGS} -std=c++17"
 
 FROM ubuntu:22.04 AS setup
 
-# Set bash as the default shell in this Dockerfile
-
 SHELL ["/bin/bash", "-c"]
-
-# Set a label to keep track of all versions (these can be viewed with "docker inspect")
-# Separate them with a '|' to potentially make them easily parsable
 
 LABEL installed.software.versions="\
   ROOT ${ROOT_VERSION}\
@@ -70,213 +54,59 @@ LABEL installed.software.versions="\
   | Julia ${JULIA_VERSION}\
   | yq ${YQ_VERSION}"
 
-# Add some info about authors and contents using the rules o the OCI Image Format Specification
-# https://github.com/opencontainers/image-spec/blob/main/annotations.md#pre-defined-annotation-keys
-
 LABEL org.opencontainers.image.title="electra"
 LABEL org.opencontainers.image.authors="SURGE Collaboration"
-LABEL org.opencontainers.image.description="\
-  eHIJING + SMASH + HepMC3 + Rivet + tools"
+LABEL org.opencontainers.image.source="https://github.com/jordissm/electra"
+LABEL org.opencontainers.image.description="ELECTRA: eHIJING + SMASH cold nuclear medium framework"
+LABEL org.opencontainers.image.licenses="GPL-3.0"
 
-
-
-# =======================================================
 # =======================================================
 #                   INSTALL DEPENDENCIES
 # =======================================================
-# =======================================================
 
-# Install dependencies
 FROM setup AS dependencies
 ARG PROJECT_DIR
 ARG MNT_DIR
 ARG DEBIAN_FRONTEND=noninteractive
 RUN --mount=type=cache,target=/var/cache/apt <<'EOF'
-  # apt-get update/upgrade/install
+  # Installing dependencies
   set -euxo pipefail
   ln -sf /usr/share/zoneinfo/UTC /etc/localtime
 
-  echo "==> Updating apt package lists"
   apt-get update
-
-  echo "==> Upgrading base system"
   apt-get -y upgrade
-
-  echo "==> Installing required packages"
   apt-get -y install --no-install-recommends \
-    aspell  \
-    aspell-en  \
-    autoconf  \
-    automake  \
-    autotools-dev  \
-    bash \
-    bc \
-    build-essential  \
-    bzip2  \
-    ca-certificates  \
-    clang-13 \
-    clang-format-13 \
-    clang-tidy-13 \
-    clang-tools-13 \
-    cmake  \
-    coreutils  \
-    curl \
-    cython3 \
-    ddd  \
-    debianutils  \
-    diffutils  \
-    doxygen  \
-    evince  \
-    findutils  \
-    gawk  \
-    g++ \
-    gcc  \
-    gcr  \
-    gdb  \
-    gfortran  \
-    git  \
-    gnupg  \
-    gnupg-utils  \
-    gnuplot  \
-    gnuplot-qt  \
-    gperf  \
-    graphviz \
-    grep  \
-    gzip  \
-    imagemagick \
-    ipython3  \
-    jupyter-notebook \
-    libc-bin  \
-    libc-dev-bin  \
-    libc-devtools \
-    libc++-13-dev \
-    libc++1-13 \
-    libc++abi-13-dev \
-    libc++abi1-13 \
-    libclang-common-13-dev \
-    libclang-cpp13 \
-    libclang1-13 \
-    libeigen3-dev \
-    libfreetype-dev \
-    libgif-dev  \
-    libgmp-dev  \
-    libgraphviz-dev  \
-    libgsl-dev  \
-    libjpeg-dev  \
-    libjpeg8-dev  \
-    libllvm13 \
-    liblzma-dev  \
-    libmpfr-dev  \
-    libmpfrc++-dev  \
-    libopenmpi-dev \
-    libpcre3-dev \
-    libpcre++-dev  \
-    libpng-dev  \
-    libpng-tools  \
-    libtbb-dev \
-    libssl-dev  \
-    libtool  \
-    libx11-dev  \
-    libxext-dev \
-    libxft-dev \
-    libxml2-dev \
-    libxpm-dev \
-    libxxhash-dev \
-    libzstd-dev \
-    linux-libc-dev \
-    llvm-13 \
-    llvm-13-dev \
-    llvm-13-linker-tools \
-    llvm-13-runtime \
-    llvm-13-tools \
-    locales \
-    locales-all \
-    lsb-base  \
-    lsb-release  \
-    lzma  \
-    python3-args  \
-    python3-atomicwrites  \
-    python3-colorama  \
-    python3-cryptography  \
-    python3-dateutil  \
-    python3-decorator  \
-    python3-dev  \
-    python3-distro  \
-    python3-distutils  \
-    python3-entrypoints  \
-    python3-future  \
-    python3-importlib-metadata  \
-    python3-ipython  \
-    python3-ipython-genutils  \
-    python-is-python3  \
-    python3-mpi4py \
-    python3-numexpr  \
-    python3-numpy  \
-    python3-pandas  \
-    python3-patsy  \
-    python3-pickleshare  \
-    python3-pip \
-    python3-pkg-resources  \
-    python3-prompt-toolkit  \
-    python3-psutil  \
-    python3-ptyprocess  \
-    python3-py  \
-    python3-pytest  \
-    python3-scipy  \
-    python3-seaborn  \
-    python3-secretstorage  \
-    python3-setuptools  \
-    python3-simplejson  \
-    python3-statsmodels  \
-    python3-systemd  \
-    python3-tables  \
-    python3-urllib3  \
-    python3-yaml  \
-    python3-zipp  \
-    qiv  \
-    rsync  \
-    screen  \
-    sed  \
-    sensible-utils  \
-    sqlite3  \
-    tar  \
-    tree \
-    unzip  \
-    util-linux  \
-    valgrind  \
-    vim  \
-    wget \
-    x11-common  \
-    x11-xkb-utils  \
-    x11-xserver-utils  \
-    xauth  \
-    xdot \
-    xfonts-base  \
-    xfonts-encodings  \
-    xfonts-utils  \
-    xkb-data  \
-    xml-core  \
-    xorg-sgml-doctools  \
-    xserver-common  \
-    xserver-xorg  \
-    xserver-xorg-core  \
-    xserver-xorg-input-all  \
-    xserver-xorg-input-libinput  \
-    xserver-xorg-legacy  \
-    xxhash \
-    xz-utils  \
-    zenity  \
-    zip
-echo "==> Cleaning up apt cache"
-rm -rf /var/lib/apt/lists/*
+    aspell aspell-en autoconf automake autotools-dev bash bc build-essential \
+    bzip2 ca-certificates clang-13 clang-format-13 clang-tidy-13 clang-tools-13 \
+    cmake coreutils curl cython3 ddd debianutils diffutils doxygen evince \
+    findutils gawk g++ gcc gcr gdb gfortran git gnupg gnupg-utils gnuplot \
+    gnuplot-qt gperf graphviz grep gzip imagemagick ipython3 jupyter-notebook \
+    libc-bin libc-dev-bin libc-devtools libc++-13-dev libc++1-13 libc++abi-13-dev \
+    libc++abi1-13 libclang-common-13-dev libclang-cpp13 libclang1-13 libeigen3-dev \
+    libfreetype-dev libgif-dev libgmp-dev libgraphviz-dev libgsl-dev libjpeg-dev \
+    libjpeg8-dev libllvm13 liblzma-dev libmpfr-dev libmpfrc++-dev libopenmpi-dev \
+    libpcre3-dev libpcre++-dev libpng-dev libpng-tools libtbb-dev libssl-dev \
+    libtool libx11-dev libxext-dev libxft-dev libxml2-dev libxpm-dev libxxhash-dev \
+    libzstd-dev linux-libc-dev llvm-13 llvm-13-dev llvm-13-linker-tools llvm-13-runtime \
+    llvm-13-tools locales locales-all lsb-base lsb-release lzma python3-args \
+    python3-atomicwrites python3-colorama python3-cryptography python3-dateutil \
+    python3-decorator python3-dev python3-distro python3-distutils python3-entrypoints \
+    python3-future python3-importlib-metadata python3-ipython python3-ipython-genutils \
+    python-is-python3 python3-mpi4py python3-numexpr python3-numpy python3-pandas \
+    python3-patsy python3-pickleshare python3-pip python3-pkg-resources python3-prompt-toolkit \
+    python3-psutil python3-ptyprocess python3-py python3-pytest python3-scipy python3-seaborn \
+    python3-secretstorage python3-setuptools python3-simplejson python3-statsmodels \
+    python3-systemd python3-tables python3-urllib3 python3-yaml python3-zipp qiv rsync screen \
+    sed sensible-utils sqlite3 tar tree unzip util-linux valgrind vim wget x11-common \
+    x11-xkb-utils x11-xserver-utils xauth xdot xfonts-base xfonts-encodings xfonts-utils \
+    xkb-data xml-core xorg-sgml-doctools xserver-common xserver-xorg xserver-xorg-core \
+    xserver-xorg-input-all xserver-xorg-input-libinput xserver-xorg-legacy xxhash xz-utils \
+    zenity zip
+
+  rm -rf /var/lib/apt/lists/*
 EOF
 
-# Build wrapper script around screen executable to make it usable from within the container
-# (it needs write access to SCREENDIR folder). Note that quoting the sentinel word in the
-# here-doc construct prevents to expand any ${...} inside (which is what we want here).
-
 RUN <<EOF
-  # Build wrapper script around screen executable
   set -eux
   mv /usr/bin/screen /usr/bin/screen.exe
   cat > /usr/bin/screen <<'INTERNAL_EOF'
@@ -294,73 +124,24 @@ INTERNAL_EOF
   chmod 755 /usr/bin/screen
 EOF
 
-# Set LD_LIBRARY_PATH environment variable to comply with Docker suggestion to always define
-# variables before using them (otherwise an UndefinedVar warning is given by Docker at build time).
-# Note that the base Ubuntu image already define PATH and we clearly do not want to reset this one.
-
 ENV LD_LIBRARY_PATH=''
-
-# Create main project directory
 
 WORKDIR ${PROJECT_DIR}
 WORKDIR ${MNT_DIR}
-RUN mkdir -p "${PROJECT_DIR}" "${MNT_DIR}" /workspace
+RUN mkdir -p "${PROJECT_DIR}" "${MNT_DIR}"
+RUN mkdir -p ${MNT_DIR}/output/runs
 
-# =======================================================
-# =======================================================
-#                      INSTALL ROOT
-# =======================================================
-# =======================================================
-
-# Install ROOT
-# FROM dependencies AS root-install
-# RUN <<EOF
-#   set -euxo pipefail
-#   echo "==> Downloading ROOT ${ROOT_VERSION}"
-#   cd ${PROJECT_DIR}
-#   wget https://root.cern/download/root_v${ROOT_VERSION}.source.tar.gz
-#   tar xf root_v${ROOT_VERSION}.source.tar.gz
-#   mv root-${ROOT_VERSION} root_src
-#   mkdir -p root_install root_build
-#   cd root_build
-#   echo "==> Configuring ROOT"
-#   cmake -DCMAKE_INSTALL_PREFIX=../root_install ../root_src \
-#         -Dxrootd=OFF \
-#         -Dbuiltin_tbb=OFF \
-#         -Ddavix=OFF
-#   echo "==> Building and installing ROOT"
-#   cmake --build . --target install -j$(nproc)
-#   printf '${PROJECT_DIR}/root_install/lib\n' >> /etc/ld.so.conf
-#   ldconfig
-# EOF
-
-# ENV ROOTSYS=${PROJECT_DIR}/root_install
-# ENV PATH=${ROOTSYS}/bin:${PATH}
-# ENV LD_LIBRARY_PATH=${ROOTSYS}/lib:${LD_LIBRARY_PATH}
-# ENV SHLIB_PATH=${ROOTSYS}/lib
-# ENV LIBPATH=${ROOTSYS}/lib
-# ENV PYTHONPATH=${ROOTSYS}/lib:${PYTHONPATH}
-# ENV MANPATH=${ROOTSYS}/man:${MANPATH}
-# ENV CMAKE_PREFIX_PATH=${ROOTSYS}:${CMAKE_PREFIX_PATH}
-# ENV JUPYTER_PATH=${ROOTSYS}/etc/notebook:${JUPYTER_PATH}
-# ENV JUPYTER_CONFIG_DIR=${ROOTSYS}/etc/notebook:${JUPYTER_CONFIG_DIR}
-# ENV CLING_STANDARD_PCH=none
-
-
-# =======================================================
 # =======================================================
 #                     INSTALL HEPMC3
 # =======================================================
-# =======================================================
 
-# Install HepMC3
 FROM dependencies AS hepmc3-install
 ARG PROJECT_DIR
 ARG HEPMC_INSTALL
 ARG HEPMC_VERSION
 
 RUN <<EOF
-  # Download and build HepMC3
+  # Installing HepMC3
   set -euxo pipefail
   cd ${PROJECT_DIR}
   wget https://hepmc.web.cern.ch/hepmc/releases/HepMC3-${HEPMC_VERSION}.tar.gz
@@ -381,21 +162,17 @@ RUN <<EOF
 EOF
 
 ENV PATH=${HEPMC_INSTALL}/bin:${PATH}
-# This is needed to make ROOT correctly find HEPMC files
 ENV ROOT_INCLUDE_PATH=${PROJECT_DIR}/hepmc3_install/include/
 
 # =======================================================
-# =======================================================
 #                    INSTALL GITSTATS
 # =======================================================
-# =======================================================
 
-# Install gitstats
 FROM hepmc3-install AS gitstats-install
 ARG PROJECT_DIR
 
 RUN <<EOF
-  # Download and build gitstats
+  # Installing gitstats
   set -euxo pipefail
   cd ${PROJECT_DIR}
   git clone https://github.com/hoxu/gitstats.git
@@ -404,19 +181,16 @@ RUN <<EOF
 EOF
 
 # =======================================================
-# =======================================================
 #              INSTALL CPPCHECK AND CPPLINT
 # =======================================================
-# =======================================================
 
-# Install cppcheck and cpplint
 FROM gitstats-install AS cppcheck-cpplint-install
 ARG PROJECT_DIR
 ARG CPPCHECK_VERSION
 ARG CPPLINT_VERSION
 
 RUN <<EOF
-  # Download and build Cppcheck and Cpplint
+  # Installing cpp-check and cpp-lint
   set -euxo pipefail
   cd ${PROJECT_DIR}
   wget https://github.com/danmar/cppcheck/archive/${CPPCHECK_VERSION}.tar.gz
@@ -438,17 +212,10 @@ EOF
 
 ENV PATH=${PATH}:${PROJECT_DIR}/auxiliary_progs
 
-
-# =======================================================
 # =======================================================
 #                      INSTALL RIVET
 # =======================================================
-# =======================================================
 
-# (the versions of the dependent libraries listed at the top of this file
-# are chosen according to the bootstrap script downloadable from the Rivet website)
-
-# Install Rivet
 FROM cppcheck-cpplint-install AS rivet-install
 ARG PROJECT_DIR
 ARG HEPMC_INSTALL
@@ -462,13 +229,14 @@ ARG FASTJET_PATH=${RIVET_INSTALL_PREFIX}
 ARG YODA_PATH=${RIVET_INSTALL_PREFIX}
 
 RUN <<EOF
-  # Download and build Rivet and its dependencies: Fastjet, Fastjet-contrib and Yoda
+  # Installing Rivet
   set -euxo pipefail
   printf 'Preparing Rivet installation\n'
   mkdir -p ${RIVET_INSTALL_PREFIX}/etc/bash_completion.d \
            ${RIVET_INSTALL_PREFIX}/lib
   ln -s lib ${RIVET_INSTALL_PREFIX}/lib64
   mkdir -p ${RIVET_BUILD_PREFIX}
+
   printf 'Installing Fastjet\n'
   cd ${RIVET_BUILD_PREFIX}
   wget --no-check-certificate --no-verbose \
@@ -477,6 +245,7 @@ RUN <<EOF
   ./configure --prefix=${RIVET_INSTALL_PREFIX} --enable-shared --disable-auto-ptr --enable-allcxxplugins
   make -j$(nproc)
   make install
+
   printf 'Installing Fastjet-contrib\n'
   cd ${RIVET_BUILD_PREFIX}
   wget --no-check-certificate --no-verbose \
@@ -486,6 +255,7 @@ RUN <<EOF
   sed -i.bak -e 's/#include <array>/#include <array>\n#include <limits>/' LundPlane/EEHelpers.hh
   make -j1 fragile-shared-install
   make install
+
   printf 'Installing Yoda\n'
   cd ${RIVET_BUILD_PREFIX}
   wget --no-check-certificate --no-verbose \
@@ -495,6 +265,7 @@ RUN <<EOF
   make -j$(nproc)
   make install
   cp yodaenv.sh ${YODA_PATH}/yodaenv.sh
+
   printf 'Installing Rivet\n'
   cd ${RIVET_BUILD_PREFIX}
   wget --no-check-certificate --no-verbose \
@@ -514,100 +285,97 @@ EOF
 ENV PYTHON=/usr/bin/python3
 ENV PATH=${RIVET_INSTALL_PREFIX}/bin:${PATH}
 ENV LD_LIBRARY_PATH="${RIVET_INSTALL_PREFIX}/lib:${RIVET_INSTALL_PREFIX}/lib64:${LD_LIBRARY_PATH}"
-# The python version must be updated together with the underlying linux distribution.
-# Unfortunately something like $(python3 -V | cut -d " " -f 2) does not work in an ENV statement.
 ENV PYTHONPATH="${RIVET_INSTALL_PREFIX}/lib/python3.10/site-packages:${PYTHONPATH}"
-# ENV PYTHONPATH="${RIVET_INSTALL_PREFIX}/lib/python3.8.10/site-packages:${PYTHONPATH}"
 ENV TEXMFHOME="${RIVET_INSTALL_PREFIX}/share/Rivet/texmf:${TEXMFHOME}"
 ENV HOMETEXMF="${RIVET_INSTALL_PREFIX}/share/Rivet/texmf:${HOMETEXMF}"
 ENV TEXMFCNF="${RIVET_INSTALL_PREFIX}/share/Rivet/texmf/cnf:${TEXMFCNF}"
 ENV TEXINPUTS="${RIVET_INSTALL_PREFIX}/share/Rivet/texmf/tex:${TEXINPUTS}"
 ENV LATEXINPUTS="${RIVET_INSTALL_PREFIX}/share/Rivet/texmf/tex:${LATEXINPUTS}"
 
-
-# =======================================================
-# =======================================================
-#                     INSTALL JULIA
-# =======================================================
-# =======================================================
-
-# Install julia
-# FROM rivet-install AS julia-install
-# ARG JULIA_PATH=/opt/julia-${JULIA_VERSION}
-# RUN <<EOF
-#   set -euxo pipefail
-#   cd /opt
-#   wget https://github.com/JuliaLang/julia/releases/download/v${JULIA_VERSION}/julia-${JULIA_VERSION}.tar.gz
-#   tar xf julia-${JULIA_VERSION}.tar.gz
-#   cd julia-${JULIA_VERSION}
-#   make -j$(nproc)
-# EOF
-
-# ENV PATH=${JULIA_PATH}:${PATH}
-
-
-# =======================================================
 # =======================================================
 #                      INSTALL YQ
 # =======================================================
-# =======================================================
 
-# Install yq
 FROM rivet-install AS yq-install
 ARG YQ_VERSION
-ARG YQ_BINARY=yq_linux_amd64
+ARG TARGETARCH
 
 RUN <<EOF
-  # Download yq
+  # Installing yq
   set -euxo pipefail
+  case "${TARGETARCH}" in
+    amd64) YQ_BINARY="yq_linux_amd64" ;;
+    arm64) YQ_BINARY="yq_linux_arm64" ;;
+    *) echo "Unsupported TARGETARCH=${TARGETARCH}" ; exit 1 ;;
+  esac
   cd /opt
   wget https://github.com/mikefarah/yq/releases/download/v${YQ_VERSION}/${YQ_BINARY} -O /usr/bin/yq
   chmod +x /usr/bin/yq
 EOF
 
 # =======================================================
-# =======================================================
-#                   INSTALL EHIJING
-# =======================================================
+#                    INSTALL PYTHIA8
 # =======================================================
 
-
-
-# =======================================================
-# =======================================================
-#                   INSTALL PYTHIA8
-# =======================================================
-# =======================================================
 FROM yq-install AS pythia-install
 ARG PROJECT_DIR
 
 RUN <<EOF
-  # Download and build Pythia8
+  # Installing pythia
   set -euxo pipefail
   cd ${PROJECT_DIR}
   wget https://pythia.org/download/pythia83/pythia8316.tgz
   tar -xf pythia8316.tgz && rm pythia8316.tgz
   cd pythia8316
-  ./configure --cxx-common='-std=c++11 -march=native -O3 -fPIC'
+  ./configure --cxx-common='-std=c++17 -O3 -fPIC'
   make -j$(nproc)
 EOF
 
 # =======================================================
+#                    INSTALL EHIJING
+# =======================================================
+FROM pythia-install AS ehijing-install
+ARG PROJECT_DIR
+
+RUN <<EOF
+  # Installing ehijing
+  set -euxo pipefail
+  mkdir -p ${PROJECT_DIR}/ehijing_bin
+  cd ${PROJECT_DIR}
+  git clone https://github.com/jordissm/ehijing.git
+  cd ehijing/external/pythia8
+  ./configure --cxx-common='-std=c++17 -O3 -fPIC'
+  make -j$(nproc)
+  mkdir -p ${PROJECT_DIR}/ehijing/build
+  cd ${PROJECT_DIR}/ehijing/build
+  cmake -DPYTHIA8_INCLUDE_DIR=${PROJECT_DIR}/ehijing/external/pythia8/include/ \
+        -DPYTHIA8_LIBRARY=${PROJECT_DIR}/ehijing/external/pythia8/lib/libpythia8.a ..
+  make ehijing -j$(nproc)
+  if [[ $? -ne 0 ]]; then
+    echo "Error: 'make ehijing -j$(nproc)' compilation failed!"
+  fi
+  if [[ -f ${PROJECT_DIR}/ehijing/build/ehijing ]]; then
+    cp ${PROJECT_DIR}/ehijing/build/ehijing ${PROJECT_DIR}/ehijing_bin/
+    cp -r ${PROJECT_DIR}/ehijing/config/ ${PROJECT_DIR}/ehijing_bin/
+    cp -r ${PROJECT_DIR}/ehijing/scripts/ ${PROJECT_DIR}/ehijing_bin/
+  else
+    echo "ehijing executable not found! Something went wrong compiling ehijing!"
+    exit 1
+  fi
+EOF
+
 # =======================================================
 #                     INSTALL SMASH
 # =======================================================
-# =======================================================
 
-# Install SMASH
-FROM pythia-install AS smash-build
+FROM ehijing-install AS smash-build
 ARG PROJECT_DIR
-ARG MNT_DIR
 ARG HEPMC_INSTALL
 
 RUN <<EOF
-  # Download and build SMASH
+  # Installing smash
   set -euxo pipefail
-  mkdir -p ${MNT_DIR}/smash_bin
+  mkdir -p ${PROJECT_DIR}/smash_bin
   cd ${PROJECT_DIR}
   git clone https://github.com/jordissm/smash.git
   mkdir -p smash/build
@@ -625,8 +393,8 @@ RUN <<EOF
     echo "Error: make SMASH compilation failed!"
   fi
   if [[ -f ${PROJECT_DIR}/smash/build/smash ]]; then
-    cp ${PROJECT_DIR}/smash/build/smash ${MNT_DIR}/smash_bin/
-    cp ${PROJECT_DIR}/smash/build/config.yaml ${MNT_DIR}/smash_bin/
+    cp ${PROJECT_DIR}/smash/build/smash ${PROJECT_DIR}/smash_bin/
+    cp ${PROJECT_DIR}/smash/build/config.yaml ${PROJECT_DIR}/smash_bin/
   else
     echo "SMASH executable not found! Something went wrong compiling SMASH!"
     exit 1
@@ -634,14 +402,10 @@ RUN <<EOF
 EOF
 
 
+# =======================================================
+#                 CLEANUP AND FINAL IMAGE
+# =======================================================
 
-# Miscellaneous:
-#  1. Remove most of the sources
-#  2. Allow Imagemagick to process PS, EPS and PDF files in case the user needs to use `convert` inside the container
-#  3. Set a symbolic link to clang-format-13 and clang-tidy-13 to make them usable from the SMASH formatting script
-#  4. Install cmake-format
-
-# Cleanup and final adjustments
 FROM smash-build AS final-image
 ARG PROJECT_DIR
 ARG MNT_DIR
@@ -651,7 +415,10 @@ ARG CPPLINT_VERSION
 ARG ROOT_VERSION
 ARG RIVET_BUILD_PREFIX
 
+ENV MNT_DIR="${MNT_DIR}"
+
 RUN <<EOF
+  # Finalizing and producing final image
   set -euxo pipefail
   cd ${PROJECT_DIR}
   rm -rf HepMC3-${HEPMC_VERSION} \
@@ -662,9 +429,6 @@ RUN <<EOF
          ${CPPCHECK_VERSION}.tar.gz \
          cpplint-${CPPLINT_VERSION} \
          ${CPPLINT_VERSION}.tar.gz \
-         root_v${ROOT_VERSION}.source.tar.gz \
-         root_build \
-         root_src \
          ${RIVET_BUILD_PREFIX} \
          /var/cache/apt/archives/*.deb
   sed -i -e "/ghostscript/d" -e "/PS/d" -e "/PS2/d" -e "/PS3/d" \
@@ -673,24 +437,41 @@ RUN <<EOF
   ln -s /usr/bin/clang-tidy-13 /usr/bin/clang-tidy
   pip install cmakelang
 
-  # Put smash on PATH in a stable location too (nice for humans + scripts)
   install -d /usr/local/bin
-  install -m 0755 ${MNT_DIR}/smash_bin/smash /usr/local/bin/smash
+  install -m 0755 ${PROJECT_DIR}/ehijing_bin/ehijing /usr/local/bin/ehijing
+  install -m 0755 ${PROJECT_DIR}/smash_bin/smash /usr/local/bin/smash
 EOF
 
-WORKDIR /workspace
+# PATCH: install the electra python package into the image (late for caching)
+# Assumes build context is the repo root containing pyproject.toml + python/electra/*
+COPY pyproject.toml README.md ${PROJECT_DIR}/electra_src/
+COPY python/ ${PROJECT_DIR}/electra_src/python/
+COPY rivet-analyses/ ${PROJECT_DIR}/share/rivet-analyses/
+COPY slurm-scripts/  ${PROJECT_DIR}/share/slurm-scripts/
+COPY utils/          ${PROJECT_DIR}/share/utils/
 
-# Set a few other environment variables (just to be sure which locale is used)
-# Set the locations of the SMASH sources and build directory for the variables used by FindSMASH.cmake
+RUN <<'EOF'
+  set -euxo pipefail
+
+  # Make packaging toolchain modern enough for PEP 621 reliably
+  python3 -m pip install --no-cache-dir --upgrade pip setuptools wheel
+
+  # Now install electra
+  python3 -m pip install --no-cache-dir "${PROJECT_DIR}"/electra_src
+
+  # Validate
+  python3 -m pip show electra
+  command -v electra
+  electra --help >/dev/null
+EOF
 
 ENV SMASH_DIR=${PROJECT_DIR}/smash
-ENV SMASH_BUILD_DIR=${MNT_DIR}/smash_bin
+ENV SMASH_BUILD_DIR=${PROJECT_DIR}/smash_bin
 ENV LC_ALL=en_US.UTF-8
 ENV LANG=en_US.UTF-8
 ENV LANGUAGE=en_US.UTF-8
 ENV PROMPT_CONTAINER_NAME='electra'
 
-# Set a nice prompt for bash and singularity environments
 RUN <<'EOF'
   set -eux
   COMMON_PS1='${PROMPT_CONTAINER_NAME:-SMASH} - \D{%d.%m.%y %H:%M:%S} \001\033[1;94m\002\w\001\033[0m\002 \$ '
@@ -706,6 +487,7 @@ EOF
 RUN <<'EOF' cat > /usr/local/bin/entrypoint.sh
 #!/usr/bin/env bash
 set -e
+mkdir -p ${MNT_DIR}/output/runs
 
 cat <<'BANNER'
 =============================================================================

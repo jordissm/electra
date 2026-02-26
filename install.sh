@@ -1,81 +1,92 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-CONTAINER_IMAGE_DOCKER_DEFAULT="ghcr.io/jordissm/electra:latest"   # change
-CONTAINER_IMAGE_APPTAINER_DEFAULT=""                              # optional .sif path
+CONTAINER_IMAGE_DOCKER_DEFAULT="ghcr.io/jordissm/electra:latest"
+CONTAINER_IMAGE_APPTAINER_DEFAULT=""
 PREFIX_DEFAULT="$PWD"
+
+# Default bind dirs (relative to where install.sh is run)
+OUTPUT_DEFAULT="$PWD/output"
+INPUT_DEFAULT=""
 
 PREFIX="$PREFIX_DEFAULT"
 IMG_DOCKER="$CONTAINER_IMAGE_DOCKER_DEFAULT"
 SIF_PATH="$CONTAINER_IMAGE_APPTAINER_DEFAULT"
 TMPDIR_OPT="${TMPDIR:-/tmp}"
+OUTPUT_DIR="$OUTPUT_DEFAULT"
+INPUT_DIR="$INPUT_DEFAULT"
 
 print_help() {
   cat <<EOF
 USAGE: ./install.sh [OPTIONS]
 
 OPTIONS:
-  -p, --prefix <dir>        Install prefix for launcher (default: $PREFIX_DEFAULT)
-  -i, --image <ref>         Docker image ref (default: $CONTAINER_IMAGE_DOCKER_DEFAULT)
-  -s, --sif <path>          Apptainer/Singularity SIF path (optional; if empty uses 'docker://' pull at runtime)
-  -t, --tmpdir <dir>        Set TMPDIR and SINGULARITY_TMPDIR (default: $TMPDIR_OPT)
+  -p, --prefix <dir>        Where to write electra-shell (default: $PREFIX_DEFAULT)
+  -i, --image <ref>         Container image ref (default: $CONTAINER_IMAGE_DOCKER_DEFAULT)
+  -s, --sif <path>          Apptainer/Singularity SIF path (optional)
+  -t, --tmpdir <dir>        TMPDIR for apptainer/singularity (default: $TMPDIR_OPT)
+      --output <dir>        Default host output directory (default: $OUTPUT_DEFAULT)
+      --input <dir>         Default host input directory (optional)
+  (workdir is set at runtime via electra-shell --workdir; default /workspace)
   -h, --help                Show help
 
 What it creates:
-  <prefix>/electra-shell    A launcher that runs your repo inside Docker (local) or Apptainer/Singularity (cluster).
+  <prefix>/electra-shell
 
-Examples:
+Typical usage:
   ./install.sh
-  ./install.sh --image ghcr.io/jordissm/electra:latest
-  ./electra-shell
-  ./electra-shell -- ./electra pipeline run --run-dir runs/test --nevents 10 --nreplicas 5 --profiles-index input/smash/xsec_scaling_factor_profiles/profiles.jsonl
+  ./electra-shell -- electra --help
+  ./electra-shell -- electra pipeline run --run-dir /output/test --nevents 1
 EOF
+}
+
+realpath_py() {
+  python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$1"
 }
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    -p|--prefix) PREFIX="$(python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$2")"; shift 2;;
+    -p|--prefix) PREFIX="$(realpath_py "$2")"; shift 2;;
     -i|--image)  IMG_DOCKER="$2"; shift 2;;
     -s|--sif)    SIF_PATH="$2"; shift 2;;
     -t|--tmpdir) TMPDIR_OPT="$2"; shift 2;;
+    --output)    OUTPUT_DIR="$(realpath_py "$2")"; shift 2;;
+    --input)     INPUT_DIR="$(realpath_py "$2")"; shift 2;;
     -h|--help)   print_help; exit 0;;
     *) echo "ERROR: unknown arg $1"; echo "Use --help"; exit 1;;
   esac
 done
 
 mkdir -p "$PREFIX"
+mkdir -p "$OUTPUT_DIR"
+if [[ -n "$INPUT_DIR" ]]; then
+  mkdir -p "$INPUT_DIR"
+fi
 
 cat > "$PREFIX/electra-shell" <<EOF
 #!/usr/bin/env bash
 set -euo pipefail
 
-# --- captured config from install.sh ---
-PREFIX="$PREFIX"
+# --- captured config ---
 IMG_DOCKER="$IMG_DOCKER"
 SIF_PATH="$SIF_PATH"
 TMPDIR_OPT="$TMPDIR_OPT"
-
-REPO_ROOT="\$(cd "\$(dirname "\${BASH_SOURCE[0]}")" && pwd)"
-# If electra-shell installed outside the repo, prefer current working dir if it contains electra.
-if [[ -f "\$PWD/electra" ]]; then
-  REPO_ROOT="\$PWD"
-fi
+OUTPUT_DIR="$OUTPUT_DIR"
+INPUT_DIR="$INPUT_DIR"
 
 print_help() {
   cat <<'HLP'
-USAGE: ./electra-shell [--] [COMMAND...]
+USAGE: ./electra-shell [OPTIONS] [--] [COMMAND...]
+
+OPTIONS:
+  --output <dir>    Host directory bound to /output (default captured at install time)
+  --input <dir>     Host directory bound to /input (optional)
+  --workdir <path>  Container working directory (default: /workspace)
+  -h, --help        Show help
 
 Examples:
-  # interactive shell inside container
-  ./electra-shell
-
-  # run one command inside container
-  ./electra-shell -- ./electra --help
-  ./electra-shell -- ./electra pipeline run ...
-
-Notes:
-  - The repo is mounted at /workspace inside the container
-  - You should put run outputs under /workspace/runs/... (i.e., relative paths under the workspace)
+  ./electra-shell -- electra --help
+  ./electra-shell -- electra pipeline run --run-dir /output/run1 --nevents 1
 HLP
 }
 
@@ -84,14 +95,23 @@ if [[ "\${1:-}" == "-h" || "\${1:-}" == "--help" ]]; then
   exit 0
 fi
 
-# Everything after '--' is treated as the command to run in the container
-CMD=()
-if [[ "\${1:-}" == "--" ]]; then
-  shift
-  CMD=( "\$@" )
-fi
+# Parse launcher options
+OUTPUT="\$OUTPUT_DIR"
+INPUT="\$INPUT_DIR"
+WORKDIR="/workspace"
 
-# Prefer apptainer/singularity if present (cluster), else docker (local)
+while [[ \$# -gt 0 ]]; do
+  case "\$1" in
+    --output) OUTPUT="\$2"; shift 2;;
+    --input)  INPUT="\$2"; shift 2;;
+    --workdir) WORKDIR="\$2"; shift 2;;
+    --) shift; break;;
+    *) break;;
+  esac
+done
+
+CMD=( "\$@" )
+
 ENGINE=""
 if command -v apptainer >/dev/null 2>&1; then
   ENGINE="apptainer"
@@ -100,7 +120,7 @@ elif command -v singularity >/dev/null 2>&1; then
 elif command -v docker >/dev/null 2>&1; then
   ENGINE="docker"
 else
-  echo "ERROR: Need apptainer/singularity (cluster) or docker (local) in PATH."
+  echo "ERROR: Need apptainer/singularity or docker in PATH."
   exit 1
 fi
 
@@ -108,44 +128,71 @@ export TMPDIR="\$TMPDIR_OPT"
 export SINGULARITY_TMPDIR="\$TMPDIR_OPT"
 export APPTAINER_TMPDIR="\$TMPDIR_OPT"
 
-# Bind common paths; keep it simple and explicit
-BIND_REPO="\$REPO_ROOT:/workspace"
+mkdir -p "\$OUTPUT"
+BIND_OUTPUT="\$OUTPUT:/workspace/output"
+
+BIND_INPUT=""
+if [[ -n "\$INPUT" ]]; then
+  mkdir -p "\$INPUT"
+  BIND_INPUT="\$INPUT:/input"
+fi
 
 if [[ "\$ENGINE" == "docker" ]]; then
-  PLATFORM_FLAG=""
-  if [[ "\$(uname -m)" == "arm64" ]]; then
-    PLATFORM_FLAG="--platform linux/amd64"
+
+  DOCKER_CTX="\$(docker context show 2>/dev/null || true)"
+  [[ -z "\$DOCKER_CTX" ]] && DOCKER_CTX="default"
+
+  if ! docker image inspect "\$IMG_DOCKER" >/dev/null 2>&1; then
+    if docker --context desktop-linux image inspect "\$IMG_DOCKER" >/dev/null 2>&1; then
+      DOCKER_CTX="desktop-linux"
+    fi
   fi
 
-  # Mount repo, work in /workspace
+  DOCKER=(docker --context "\$DOCKER_CTX")
+
+  PULL_FLAG="--pull=missing"
+  [[ "\$IMG_DOCKER" != *"/"* ]] && PULL_FLAG="--pull=never"
+
+  PLATFORM_FLAG=""
+  # HOST_ARCH="\$(uname -m)"
+  # if [[ "\$HOST_ARCH" == "arm64" ]]; then
+  #   IMG_ARCH="\$(\"\${DOCKER[@]}\" image inspect \"\$IMG_DOCKER\" --format '{{.Architecture}}' 2>/dev/null || true)"
+  #   if [[ "\$IMG_ARCH" == "amd64" || "\$IMG_ARCH" == "x86_64" ]]; then
+  #     PLATFORM_FLAG="--platform linux/amd64"
+  #   fi
+  # fi
+
   if [[ "\${#CMD[@]}" -eq 0 ]]; then
-    docker run \$PLATFORM_FLAG -it --rm \\
-      -v "\$BIND_REPO" \\
-      -w /workspace \\
+    "\${DOCKER[@]}" run \$PULL_FLAG \${PLATFORM_FLAG:-} -it --rm \\
+      -v "\$BIND_OUTPUT" \\
+      \$( [[ -n "\$BIND_INPUT" ]] && echo -v "\$BIND_INPUT" ) \\
+      -w "\$WORKDIR" \\
       "\$IMG_DOCKER" \\
       /bin/bash
   else
-    docker run \$PLATFORM_FLAG -it --rm \\
-      -v "\$BIND_REPO" \\
-      -w /workspace \\
+    "\${DOCKER[@]}" run \$PULL_FLAG \${PLATFORM_FLAG:-} -it --rm \\
+      -v "\$BIND_OUTPUT" \\
+      \$( [[ -n "\$BIND_INPUT" ]] && echo -v "\$BIND_INPUT" ) \\
+      -w "\$WORKDIR" \\
       "\$IMG_DOCKER" \\
       "\${CMD[@]}"
   fi
   exit 0
 fi
 
-# apptainer/singularity path
+# Apptainer/Singularity
 SIF="\$SIF_PATH"
-if [[ -z "\$SIF" ]]; then
-  # Pull on demand from docker registry (cached by engine)
-  SIF="docker://\$IMG_DOCKER"
-fi
+[[ -z "\$SIF" ]] && SIF="docker://\$IMG_DOCKER"
 
-# Engine exec
+BIND_ARGS=( "--bind" "\$BIND_OUTPUT" )
+[[ -n "\$BIND_INPUT" ]] && BIND_ARGS+=( "--bind" "\$BIND_INPUT" )
+
 if [[ "\${#CMD[@]}" -eq 0 ]]; then
-  "\$ENGINE" exec --bind "\$BIND_REPO" "\$SIF" /bin/bash
+  "\$ENGINE" exec "\${BIND_ARGS[@]}" "\$SIF" /bin/bash -lc "cd \"\$WORKDIR\" && exec /bin/bash"
 else
-  "\$ENGINE" exec --bind "\$BIND_REPO" "\$SIF" "\${CMD[@]}"
+  # Quote CMD safely into a shell command for bash -lc
+  printf -v _cmd '%q ' "\${CMD[@]}"
+  "\$ENGINE" exec "\${BIND_ARGS[@]}" "\$SIF" /bin/bash -lc "cd \"\$WORKDIR\" && exec \$_cmd"
 fi
 EOF
 
@@ -153,4 +200,6 @@ chmod +x "$PREFIX/electra-shell"
 
 echo "Environment setup successful."
 echo "Launcher created at: $PREFIX/electra-shell"
-echo "Run: $PREFIX/electra-shell"
+echo "Default output dir: $OUTPUT_DIR"
+[[ -n "$INPUT_DIR" ]] && echo "Default input dir:  $INPUT_DIR"
+echo "Run: $PREFIX/electra-shell -- electra --help"
