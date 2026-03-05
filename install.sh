@@ -188,11 +188,15 @@ BIND_ARGS=( "--bind" "\$BIND_OUTPUT" )
 [[ -n "\$BIND_INPUT" ]] && BIND_ARGS+=( "--bind" "\$BIND_INPUT" )
 
 if [[ "\${#CMD[@]}" -eq 0 ]]; then
-  "\$ENGINE" exec "\${BIND_ARGS[@]}" "\$SIF" /bin/bash -lc "cd \"\$WORKDIR\" && exec /bin/bash"
+  "\$ENGINE" exec "\${BIND_ARGS[@]}" "\$SIF" \
+  /usr/local/bin/entrypoint.sh \
+  /bin/bash -lc "cd \"\$WORKDIR\" && exec /bin/bash"
 else
   # Quote CMD safely into a shell command for bash -lc
   printf -v _cmd '%q ' "\${CMD[@]}"
-  "\$ENGINE" exec "\${BIND_ARGS[@]}" "\$SIF" /bin/bash -lc "cd \"\$WORKDIR\" && exec \$_cmd"
+  "\$ENGINE" exec "\${BIND_ARGS[@]}" "\$SIF" \
+  /usr/local/bin/entrypoint.sh \
+  /bin/bash -lc "cd \"\$WORKDIR\" && exec \$_cmd"
 fi
 EOF
 
