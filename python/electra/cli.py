@@ -10,6 +10,7 @@ Design principles:
 
 from __future__ import annotations
 
+import os
 import argparse
 import hashlib
 import json
@@ -190,22 +191,29 @@ def ehijing_task(
     mkdir(layout["ehijing_events"])
     mkdir(layout["ehijing_logs"])
 
+    events_dir = layout["ehijing_events"]
+
     # Your ehijing writes evt_000000.oscar etc into an output directory.
     # We mark completion per event_id once that file exists.
-    out_evt = layout["ehijing_events"] / f"evt_{event_id:06d}.oscar"
+    out_evt = events_dir / f"evt_{event_id:06d}.oscar"
     done = out_evt.with_suffix(".done")
     if done.exists():
         return
 
     # Ensure tables + events dirs exist (fixes your earlier filesystem error)
     mkdir(Path(table_path))
-    mkdir(layout["ehijing_events"])
 
     # Seed handling:
     # Your current ehijing main.cpp does NOT accept a seed argument,
     # so we can only *record* a deterministic seed for now.
     PYTHIA_SEED_MAX = 900_000_000  # Pythia8 allowed max
     seed = 1 + (hash_seed(base_seed, event_id) % PYTHIA_SEED_MAX)
+
+    # Run into a unique temp dir to avoid filename collisions
+    tmp_out = events_dir / f".tmp_evt_{event_id:06d}"
+    if tmp_out.exists():
+        shutil.rmtree(tmp_out)
+    mkdir(tmp_out)
 
     # Run one triggered event per call, and write into the events directory.
     # NOTE: table_path is a directory; config_file is the .setting file.
@@ -224,7 +232,7 @@ def ehijing_task(
         "--table-dir",
         str(Path(table_path)),
         "--run-dir",
-        str(layout["ehijing_events"]),
+        str(tmp_out),
         "--config-file",
         str(Path(config_file)),
         "--seed",
@@ -233,12 +241,39 @@ def ehijing_task(
 
     run(cmd)
 
-    # Sanity check: did it actually create the file we expect?
-    if not out_evt.exists():
+    produced_oscar = sorted(tmp_out.glob("evt_*.oscar"))
+    if len(produced_oscar) != 1:
         raise RuntimeError(
-            f"ehijing finished but did not create expected output: {out_evt}\n"
-            f"Command was: {' '.join(cmd)}"
+            f"ehijing produced {len(produced_oscar)} OSCAR files in {tmp_out}, expected 1.\n"
+            f"Files: {[p.name for p in produced_oscar]}"
         )
+
+    src_oscar = produced_oscar[0]
+    src_stem = src_oscar.stem  # e.g. "evt_000000"
+    dst_stem = f"evt_{event_id:06d}"  # e.g. "evt_000001"
+
+    # Move OSCAR
+    dst_oscar = events_dir / f"{dst_stem}.oscar"
+    src_oscar.replace(dst_oscar)
+
+    # Move sidecars that belong to the same event
+    # (keeps any future extra sidecars without hardcoding extensions)
+    for src in tmp_out.glob(f"{src_stem}.*"):
+        if src.name == f"{src_stem}.oscar":
+            continue  # already moved
+
+        # preserve the suffixes after the stem, e.g. ".meta.json"
+        suffix_part = src.name[len(src_stem) :]  # includes leading dot(s)
+        dst = events_dir / f"{dst_stem}{suffix_part}"
+        src.replace(dst)
+
+    # Now safe to remove temp dir
+    shutil.rmtree(tmp_out, ignore_errors=True)
+
+    # Optional: sanity check meta exists if you require it
+    dst_meta = events_dir / f"{dst_stem}.meta.json"
+    if not dst_meta.exists():
+        raise RuntimeError(f"Missing expected metadata sidecar: {dst_meta}")
 
     atomic_done_marker(done)
 
@@ -400,7 +435,6 @@ def cmd_ehijing(args: argparse.Namespace) -> None:
 def cmd_smash(args: argparse.Namespace) -> None:
     run_dir = Path(args.run_dir).resolve()
     mkdir(run_dir)
-
     layout = run_layout(run_dir)
 
     events_dir = layout["ehijing_events"]
@@ -411,17 +445,20 @@ def cmd_smash(args: argparse.Namespace) -> None:
     if not event_files:
         raise FileNotFoundError(f"No per-event OSCAR files found in: {events_dir}")
 
-    event_files = event_files[: int(args.nevents)]
+    # Determine E (events)
+    E_req = int(args.nevents)
+    event_files = event_files[:E_req]
+    E = len(event_files)
+    if E == 0:
+        raise FileNotFoundError(
+            f"Requested nevents={E_req} but no events found in {events_dir}"
+        )
 
     profiles_index = Path(args.profiles_index).resolve()
     if not profiles_index.exists():
         raise FileNotFoundError(f"Missing profiles index: {profiles_index}")
 
     profiles_root = deduce_profiles_root_from_index(profiles_index)
-    if not profiles_root.exists():
-        raise FileNotFoundError(
-            f"Deduced profiles root does not exist: {profiles_root}"
-        )
     if not profiles_root.is_dir():
         raise NotADirectoryError(
             f"Deduced profiles root is not a directory: {profiles_root}"
@@ -433,11 +470,57 @@ def cmd_smash(args: argparse.Namespace) -> None:
 
     if args.nprofiles is not None:
         profiles = profiles[: int(args.nprofiles)]
+    P = len(profiles)
+    if P == 0:
+        raise FileNotFoundError("No profiles available after applying --nprofiles")
+
+    T = E * P
 
     tab_cache = (
         Path(args.tabulations_cache).resolve() if args.tabulations_cache else None
     )
 
+    # Decide mode
+    mode = str(args.task_mode)
+    slurm_tid = os.environ.get("SLURM_ARRAY_TASK_ID")
+    task_id: Optional[int] = args.task_id
+
+    if mode == "auto":
+        if task_id is None and slurm_tid is not None:
+            task_id = int(slurm_tid)
+            mode = "one"
+        else:
+            mode = "all"
+
+    if mode == "one":
+        if task_id is None:
+            raise ValueError(
+                "--task-id is required in task-mode=one (or set SLURM_ARRAY_TASK_ID with task-mode=auto)"
+            )
+        if task_id < 0 or task_id >= T:
+            raise ValueError(
+                f"task-id {task_id} out of range [0, {T-1}] for E={E}, P={P}"
+            )
+
+        ev_idx = task_id // P
+        pr_idx = task_id % P
+
+        ev = event_files[ev_idx]
+        prof = profiles[pr_idx]
+
+        smash_physical_event_task(
+            run_dir=run_dir,
+            event_file=ev,
+            profile_rec=prof,
+            profiles_root=profiles_root,
+            nreplicas=int(args.nreplicas),
+            base_seed=int(args.seed),
+            tabulations_cache=tab_cache,
+            tabulations_mode=str(args.tabulations_mode),
+        )
+        return
+
+    # mode == "all" (current behavior, but task ids are now well-defined)
     tasks: List[TaskFn] = []
     for ev in event_files:
         for prof in profiles:
@@ -453,7 +536,6 @@ def cmd_smash(args: argparse.Namespace) -> None:
                     tabulations_mode=str(args.tabulations_mode),
                 )
             )
-
     run_local(tasks, int(args.jobs))
 
 
@@ -521,6 +603,19 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["auto", "symlink", "copy"],
         default="auto",
         help="How to stage tabulations: auto tries symlink then copies; symlink forces link; copy forces copy",
+    )
+    psr.add_argument(
+        "--task-mode",
+        choices=["auto", "all", "one"],
+        default="auto",
+        help="auto: if SLURM_ARRAY_TASK_ID is set run one task; else run all. "
+        "all: run all tasks locally. one: run exactly one task-id.",
+    )
+    psr.add_argument(
+        "--task-id",
+        type=int,
+        default=None,
+        help="Run exactly one task (event_idx, profile_idx) mapped from task-id.",
     )
     psr.set_defaults(func=cmd_smash)
 
