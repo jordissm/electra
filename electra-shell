@@ -27,7 +27,7 @@ Examples:
 
 Notes:
   - The repo is mounted at /workspace inside the container
-  - You should put run outputs under /workspace/runs/... (i.e., relative paths under the workspace)
+  - You should put run outputs under /workspace/output/runs/... (i.e., relative paths under the workspace)
 HLP
 }
 
@@ -95,7 +95,7 @@ fi
 
 # Engine exec
 if [[ "${#CMD[@]}" -eq 0 ]]; then
-  "$ENGINE" exec --bind "$BIND_REPO" "$SIF" /bin/bash
+  "$ENGINE" exec --bind "$BIND_REPO" "$SIF" /usr/local/bin/entrypoint.sh /bin/bash
 else
-  "$ENGINE" exec --bind "$BIND_REPO" "$SIF" "${CMD[@]}"
+  "$ENGINE" exec --bind "$BIND_REPO" "$SIF" /usr/local/bin/entrypoint.sh "${CMD[@]}"
 fi
