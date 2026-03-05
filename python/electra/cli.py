@@ -204,7 +204,8 @@ def ehijing_task(
     # Seed handling:
     # Your current ehijing main.cpp does NOT accept a seed argument,
     # so we can only *record* a deterministic seed for now.
-    seed = hash_seed(base_seed, event_id)
+    PYTHIA_SEED_MAX = 900_000_000  # Pythia8 allowed max
+    seed = 1 + (hash_seed(base_seed, event_id) % PYTHIA_SEED_MAX)
 
     # Run one triggered event per call, and write into the events directory.
     # NOTE: table_path is a directory; config_file is the .setting file.
@@ -226,7 +227,8 @@ def ehijing_task(
         str(layout["ehijing_events"]),
         "--config-file",
         str(Path(config_file)),
-        # "--seed", str(seed),  # enable if your ehijing supports it
+        "--seed",
+        str(seed),  # enable if your ehijing supports it
     ]
 
     run(cmd)
