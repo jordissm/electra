@@ -174,33 +174,81 @@ def run_layout(run_dir: Path) -> Dict[str, Path]:
 # -----------------------------------------------------------------------------
 
 
-def ehijing_task(run_dir: Path, event_id: int, base_seed: int) -> None:
+def ehijing_task(
+    run_dir: Path,
+    event_id: int,
+    base_seed: int,
+    *,
+    Z: int,
+    A: int,
+    mode: int,
+    K: float,
+    table_path: Path,
+    config_file: Path,
+) -> None:
     layout = run_layout(run_dir)
     mkdir(layout["ehijing_events"])
     mkdir(layout["ehijing_logs"])
 
+    # Your ehijing writes evt_000000.oscar etc into an output directory.
+    # We mark completion per event_id once that file exists.
     out_evt = layout["ehijing_events"] / f"evt_{event_id:06d}.oscar"
     done = out_evt.with_suffix(".done")
-
     if done.exists():
         return
 
+    # Ensure tables + events dirs exist (fixes your earlier filesystem error)
+    mkdir(Path(table_path))
+    mkdir(layout["ehijing_events"])
+
+    # Seed handling:
+    # Your current ehijing main.cpp does NOT accept a seed argument,
+    # so we can only *record* a deterministic seed for now.
     seed = hash_seed(base_seed, event_id)
 
+    # Run one triggered event per call, and write into the events directory.
+    # NOTE: table_path is a directory; config_file is the .setting file.
     cmd = [
         "ehijing",
-        "--seed",
-        str(seed),
-        "--output",
-        str(out_evt),
+        "--nevents",
+        "1",
+        "--Z",
+        str(Z),
+        "--A",
+        str(A),
+        "--mode",
+        str(mode),
+        "--K",
+        str(K),
+        "--table-dir",
+        str(Path(table_path)),
+        "--run-dir",
+        str(layout["ehijing_events"]),
+        "--config-file",
+        str(Path(config_file)),
+        # "--seed", str(seed),  # enable if your ehijing supports it
     ]
 
     run(cmd)
+
+    # Sanity check: did it actually create the file we expect?
+    if not out_evt.exists():
+        raise RuntimeError(
+            f"ehijing finished but did not create expected output: {out_evt}\n"
+            f"Command was: {' '.join(cmd)}"
+        )
+
     atomic_done_marker(done)
 
     record = {
         "event_id": event_id,
-        "ehijing_seed": seed,
+        "ehijing_seed": seed,  # recorded (not yet used by ehijing)
+        "Z": Z,
+        "A": A,
+        "mode": mode,
+        "K": K,
+        "table_path": str(Path(table_path)),
+        "config_file": str(Path(config_file)),
         "path": str(out_evt),
     }
 
@@ -323,8 +371,25 @@ def cmd_ehijing(args: argparse.Namespace) -> None:
 
     base_seed = int(args.seed)
 
+    table_path = Path(args.table_path).resolve()
+    config_file = Path(args.config_file).resolve()
+    if not config_file.exists():
+        raise FileNotFoundError(f"Missing ehijing config file: {config_file}")
+
     tasks: List[TaskFn] = [
-        (lambda eid=eid: ehijing_task(run_dir, eid, base_seed))
+        (
+            lambda eid=eid: ehijing_task(
+                run_dir,
+                eid,
+                base_seed,
+                Z=int(args.Z),
+                A=int(args.A),
+                mode=int(args.mode),
+                K=float(args.K),
+                table_path=table_path,
+                config_file=config_file,
+            )
+        )
         for eid in range(int(args.nevents))
     ]
     run_local(tasks, int(args.jobs))
@@ -408,10 +473,24 @@ def build_parser() -> argparse.ArgumentParser:
     pe = sp.add_parser("ehijing")
     spe = pe.add_subparsers(dest="sub", required=True)
     per = spe.add_parser("run")
+    per.add_argument("--Z", type=int, default=1)
+    per.add_argument("--A", type=int, default=2)
+    per.add_argument("--mode", type=int, default=0)
+    per.add_argument("--K", type=float, default=4.0)
     per.add_argument("--run-dir", required=True)
     per.add_argument("--nevents", type=int, required=True)
     per.add_argument("--seed", type=int, default=12345)
     per.add_argument("--jobs", type=int, default=1)
+    per.add_argument(
+        "--table-path",
+        required=True,
+        help="Directory with eHIJING tables, e.g. output/runs/ehijing/tables/K4p0",
+    )
+    per.add_argument(
+        "--config-file",
+        required=True,
+        help="eHIJING config/setting file, e.g. input/ehijing/experiments/hermes.setting",
+    )
     per.set_defaults(func=cmd_ehijing)
 
     # SMASH
@@ -447,6 +526,12 @@ def build_parser() -> argparse.ArgumentParser:
     pp = sp.add_parser("pipeline")
     spp = pp.add_subparsers(dest="sub", required=True)
     ppr = spp.add_parser("run")
+    ppr.add_argument("--Z", type=int, default=1)
+    ppr.add_argument("--A", type=int, default=2)
+    ppr.add_argument("--mode", type=int, default=0)
+    ppr.add_argument("--K", type=float, default=4.0)
+    ppr.add_argument("--table-path", required=True)
+    ppr.add_argument("--config-file", required=True)
     ppr.add_argument("--run-dir", required=True)
     ppr.add_argument("--nevents", type=int, required=True)
     ppr.add_argument("--nreplicas", type=int, required=True)
