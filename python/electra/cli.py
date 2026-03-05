@@ -482,8 +482,8 @@ def cmd_smash(args: argparse.Namespace) -> None:
 
     # Decide mode
     mode = str(args.task_mode)
+    task_id = args.task_id
     slurm_tid = os.environ.get("SLURM_ARRAY_TASK_ID")
-    task_id: Optional[int] = args.task_id
 
     if mode == "auto":
         if task_id is None and slurm_tid is not None:
