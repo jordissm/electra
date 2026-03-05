@@ -22,11 +22,44 @@ This repository provides a framework to simulate electron-ion collision events f
 
 ### Quick Start
 
-1. Clone the repository:
+1. Download and execute the `install.sh` script:
 
-2. Build:
+'''terminal
+curl -fsSL <https://raw.githubusercontent.com/jordissm/electra/main/install.sh> -o install.sh \
+  && chmod +x install.sh \
+  && ./install.sh
+'''
 
 ## Usage
+
+'''terminal
+docker buildx build \
+  --platform linux/arm64 \
+  -t ghcr.io/jordissm/electra:arm64 \
+  -f containers/Docker/Dockerfile \
+  --push \
+  .
+'''
+
+'''terminal
+docker buildx build \
+  --platform linux/amd64 \
+  -t ghcr.io/jordissm/electra:amd64 \
+  -f containers/Docker/Dockerfile \
+  --push \
+  .
+'''
+
+'''terminal
+docker buildx imagetools create \
+  -t ghcr.io/jordissm/electra:latest \
+  ghcr.io/jordissm/electra:amd64 \
+  ghcr.io/jordissm/electra:arm64
+'''
+
+'''terminal
+docker buildx imagetools inspect ghcr.io/jordissm/electra:latest
+'''
 
 '''
 docker buildx build --platform=linux/amd64 --load -t electra:latest -f Dockerfile .
