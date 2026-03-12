@@ -16,9 +16,8 @@ import hashlib
 import json
 import shutil
 import subprocess
-from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 
 # -----------------------------------------------------------------------------
@@ -97,61 +96,6 @@ def resolve_profile_path(profiles_root: Path, profile_rec: Dict[str, Any]) -> Pa
     return (profiles_root / str(profile_rec["relpath"])).resolve()
 
 
-def stage_tabulations(
-    out_dir: Path, cache_tabulations: Optional[Path], mode: str = "auto"
-) -> None:
-    """
-    Ensure out_dir/tabulations exists, populated from cache_tabulations.
-
-    mode:
-      - "symlink": always symlink
-      - "copy": always copy
-      - "auto": try symlink, fall back to copy
-    """
-    if cache_tabulations is None:
-        return
-
-    print(f"Staging tabulations into {out_dir} from cache: {cache_tabulations}")
-
-    cache_tabulations = Path(cache_tabulations).resolve()
-    if not cache_tabulations.exists():
-        raise FileNotFoundError(
-            f"Tabulations cache does not exist: {cache_tabulations}"
-        )
-    if not cache_tabulations.is_dir():
-        raise NotADirectoryError(
-            f"Tabulations cache is not a directory: {cache_tabulations}"
-        )
-
-    dst = (out_dir / "tabulations").resolve()
-
-    # If already present, do nothing (keeps idempotency)
-    if dst.exists() or dst.is_symlink():
-        return
-
-    if mode not in {"auto", "symlink", "copy"}:
-        raise ValueError(f"Invalid tabulations mode: {mode}")
-
-    def _do_symlink() -> None:
-        dst.symlink_to(cache_tabulations, target_is_directory=True)
-
-    def _do_copy() -> None:
-        shutil.copytree(cache_tabulations, dst, dirs_exist_ok=False)
-
-    if mode == "symlink":
-        _do_symlink()
-        return
-    if mode == "copy":
-        _do_copy()
-        return
-
-    # auto
-    try:
-        _do_symlink()
-    except OSError:
-        _do_copy()
-
-
 # -----------------------------------------------------------------------------
 # Paths / layout
 # -----------------------------------------------------------------------------
@@ -221,6 +165,8 @@ def ehijing_task(
         "ehijing",
         "--nevents",
         "1",
+        "--event-id",
+        str(event_id),
         "--Z",
         str(Z),
         "--A",
@@ -306,8 +252,6 @@ def smash_physical_event_task(
     profiles_root: Path,
     nreplicas: int,
     base_seed: int,
-    tabulations_cache: Optional[Path] = None,
-    tabulations_mode: str = "auto",
 ) -> None:
     """
     Run SMASH for one physical eHIJING event file and one xsec profile.
@@ -327,11 +271,6 @@ def smash_physical_event_task(
         return
 
     mkdir(out_dir)
-
-    # Stage cached tabulations into this SMASH output directory
-    stage_tabulations(
-        layout["smash"] / event_tag, tabulations_cache, mode=tabulations_mode
-    )
 
     cfg = (run_dir / "config.yaml").resolve()
     if not cfg.exists():
@@ -378,26 +317,6 @@ def smash_physical_event_task(
 
 
 # -----------------------------------------------------------------------------
-# Local execution helpers
-# -----------------------------------------------------------------------------
-
-
-TaskFn = Callable[[], None]
-
-
-def run_local(tasks: List[TaskFn], jobs: int) -> None:
-    if jobs == 1:
-        for t in tasks:
-            t()
-        return
-
-    with ProcessPoolExecutor(max_workers=jobs) as exe:
-        futures = [exe.submit(t) for t in tasks]
-        for f in as_completed(futures):
-            f.result()
-
-
-# -----------------------------------------------------------------------------
 # Command handlers
 # -----------------------------------------------------------------------------
 
@@ -413,23 +332,18 @@ def cmd_ehijing(args: argparse.Namespace) -> None:
     if not config_file.exists():
         raise FileNotFoundError(f"Missing ehijing config file: {config_file}")
 
-    tasks: List[TaskFn] = [
-        (
-            lambda eid=eid: ehijing_task(
-                run_dir,
-                eid,
-                base_seed,
-                Z=int(args.Z),
-                A=int(args.A),
-                mode=int(args.mode),
-                K=float(args.K),
-                table_path=table_path,
-                config_file=config_file,
-            )
+    for eid in range(int(args.nevents)):
+        ehijing_task(
+            run_dir,
+            eid,
+            base_seed,
+            Z=int(args.Z),
+            A=int(args.A),
+            mode=int(args.mode),
+            K=float(args.K),
+            table_path=table_path,
+            config_file=config_file,
         )
-        for eid in range(int(args.nevents))
-    ]
-    run_local(tasks, int(args.jobs))
 
 
 def cmd_smash(args: argparse.Namespace) -> None:
@@ -476,10 +390,6 @@ def cmd_smash(args: argparse.Namespace) -> None:
 
     T = E * P
 
-    tab_cache = (
-        Path(args.tabulations_cache).resolve() if args.tabulations_cache else None
-    )
-
     # Decide mode
     mode = str(args.task_mode)
     task_id = args.task_id
@@ -515,28 +425,20 @@ def cmd_smash(args: argparse.Namespace) -> None:
             profiles_root=profiles_root,
             nreplicas=int(args.nreplicas),
             base_seed=int(args.seed),
-            tabulations_cache=tab_cache,
-            tabulations_mode=str(args.tabulations_mode),
         )
         return
 
-    # mode == "all" (current behavior, but task ids are now well-defined)
-    tasks: List[TaskFn] = []
+    # mode == "all"
     for ev in event_files:
         for prof in profiles:
-            tasks.append(
-                lambda ev=ev, prof=prof: smash_physical_event_task(
-                    run_dir=run_dir,
-                    event_file=ev,
-                    profile_rec=prof,
-                    profiles_root=profiles_root,
-                    nreplicas=int(args.nreplicas),
-                    base_seed=int(args.seed),
-                    tabulations_cache=tab_cache,
-                    tabulations_mode=str(args.tabulations_mode),
-                )
+            smash_physical_event_task(
+                run_dir=run_dir,
+                event_file=ev,
+                profile_rec=prof,
+                profiles_root=profiles_root,
+                nreplicas=int(args.nreplicas),
+                base_seed=int(args.seed),
             )
-    run_local(tasks, int(args.jobs))
 
 
 def cmd_pipeline(args: argparse.Namespace) -> None:
@@ -564,7 +466,6 @@ def build_parser() -> argparse.ArgumentParser:
     per.add_argument("--run-dir", required=True)
     per.add_argument("--nevents", type=int, required=True)
     per.add_argument("--seed", type=int, default=12345)
-    per.add_argument("--jobs", type=int, default=1)
     per.add_argument(
         "--table-path",
         required=True,
@@ -585,24 +486,12 @@ def build_parser() -> argparse.ArgumentParser:
     psr.add_argument("--nevents", type=int, required=True)
     psr.add_argument("--nreplicas", type=int, required=True)
     psr.add_argument("--seed", type=int, default=98765)
-    psr.add_argument("--jobs", type=int, default=1)
     psr.add_argument("--profiles-index", required=True, help="Path to profiles.jsonl")
     psr.add_argument(
         "--nprofiles",
         type=int,
         default=None,
         help="Optional: limit number of profiles to run per event",
-    )
-    psr.add_argument(
-        "--tabulations-cache",
-        default=None,
-        help="Path to cached SMASH 'tabulations' directory to stage into each output dir",
-    )
-    psr.add_argument(
-        "--tabulations-mode",
-        choices=["auto", "symlink", "copy"],
-        default="auto",
-        help="How to stage tabulations: auto tries symlink then copies; symlink forces link; copy forces copy",
     )
     psr.add_argument(
         "--task-mode",
@@ -633,24 +522,12 @@ def build_parser() -> argparse.ArgumentParser:
     ppr.add_argument("--nevents", type=int, required=True)
     ppr.add_argument("--nreplicas", type=int, required=True)
     ppr.add_argument("--seed", type=int, default=12345)
-    ppr.add_argument("--jobs", type=int, default=1)
     ppr.add_argument("--profiles-index", required=True, help="Path to profiles.jsonl")
     ppr.add_argument(
         "--nprofiles",
         type=int,
         default=None,
         help="Optional: limit number of profiles to run per event",
-    )
-    ppr.add_argument(
-        "--tabulations-cache",
-        default=None,
-        help="Path to cached SMASH 'tabulations' directory to stage into each output dir",
-    )
-    ppr.add_argument(
-        "--tabulations-mode",
-        choices=["auto", "symlink", "copy"],
-        default="auto",
-        help="How to stage tabulations: auto tries symlink then copies; symlink forces link; copy forces copy",
     )
     ppr.set_defaults(func=cmd_pipeline)
 

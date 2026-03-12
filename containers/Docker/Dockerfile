@@ -32,15 +32,17 @@ ARG LATEXINPUTS=''
 # ARG CPPFLAGS="${CFLAGS} -std=c++17"
 # ARG CXXFLAGS=${CPPFLAGS}
 
+
+
+FROM ubuntu:22.04 AS setup
+
+SHELL ["/bin/bash", "-c"]
+
 ARG OPTFLAGS="-O3"
 ARG ARCHFLAGS=""
 ENV CFLAGS="${OPTFLAGS} ${ARCHFLAGS}" \
   CXXFLAGS="${OPTFLAGS} ${ARCHFLAGS} -std=c++17" \
   CPPFLAGS="${OPTFLAGS} ${ARCHFLAGS} -std=c++17"
-
-FROM ubuntu:22.04 AS setup
-
-SHELL ["/bin/bash", "-c"]
 
 LABEL installed.software.versions="\
   ROOT ${ROOT_VERSION}\
@@ -68,7 +70,13 @@ FROM setup AS dependencies
 ARG PROJECT_DIR
 ARG MNT_DIR
 ARG DEBIAN_FRONTEND=noninteractive
-RUN --mount=type=cache,target=/var/cache/apt <<'EOF'
+ARG TARGETPLATFORM
+ARG BUILDPLATFORM
+ARG TARGETARCH
+ARG TARGETOS
+RUN --mount=type=cache,id=apt-cache-${TARGETPLATFORM},target=/var/cache/apt,sharing=locked \
+  --mount=type=cache,id=apt-lists-${TARGETPLATFORM},target=/var/lib/apt/lists,sharing=locked \
+  <<'EOF'
   # Installing dependencies
   set -euxo pipefail
   ln -sf /usr/share/zoneinfo/UTC /etc/localtime
@@ -78,10 +86,10 @@ RUN --mount=type=cache,target=/var/cache/apt <<'EOF'
   apt-get -y install --no-install-recommends \
     aspell aspell-en autoconf automake autotools-dev bash bc build-essential \
     bzip2 ca-certificates clang-13 clang-format-13 clang-tidy-13 clang-tools-13 \
-    cmake coreutils curl cython3 ddd debianutils diffutils doxygen evince \
+    cmake coreutils curl cython3 ddd debianutils diffutils doxygen \
     findutils gawk g++ gcc gcr gdb gfortran git gnupg gnupg-utils gnuplot \
-    gnuplot-qt gperf graphviz grep gzip imagemagick ipython3 jupyter-notebook \
-    libc-bin libc-dev-bin libc-devtools libc++-13-dev libc++1-13 libc++abi-13-dev \
+    gnuplot-qt gperf graphviz grep gzip htop imagemagick ipython3 jupyter-notebook \
+    less libc-bin libc-dev-bin libc-devtools libc++-13-dev libc++1-13 libc++abi-13-dev \
     libc++abi1-13 libclang-common-13-dev libclang-cpp13 libclang1-13 libeigen3-dev \
     libfreetype-dev libgif-dev libgmp-dev libgraphviz-dev libgsl-dev libjpeg-dev \
     libjpeg8-dev libllvm13 liblzma-dev libmpfr-dev libmpfrc++-dev libopenmpi-dev \
@@ -97,11 +105,12 @@ RUN --mount=type=cache,target=/var/cache/apt <<'EOF'
     python3-psutil python3-ptyprocess python3-py python3-pytest python3-scipy python3-seaborn \
     python3-secretstorage python3-setuptools python3-simplejson python3-statsmodels \
     python3-systemd python3-tables python3-urllib3 python3-yaml python3-zipp qiv rsync screen \
-    sed sensible-utils sqlite3 tar tree unzip util-linux valgrind vim wget x11-common \
-    x11-xkb-utils x11-xserver-utils xauth xdot xfonts-base xfonts-encodings xfonts-utils \
-    xkb-data xml-core xorg-sgml-doctools xserver-common xserver-xorg xserver-xorg-core \
-    xserver-xorg-input-all xserver-xorg-input-libinput xserver-xorg-legacy xxhash xz-utils \
-    zenity zip
+    sed sensible-utils sqlite3 tar tree unzip util-linux valgrind vim wget \
+    xxhash xz-utils zip
+    # evince qiv zenity x11-common x11-xkb-utils x11-xserver-utils xauth xdot xfonts-base \
+    # xfonts-encodings xfonts-utils xkb-data xorg-sgml-doctools xserver-common \
+    # xserver-xorg xserver-xorg-core xserver-xorg-input-all xserver-xorg-input-libinput \
+    # xserver-xorg-legacy x11vnc xvfb
 
   rm -rf /var/lib/apt/lists/*
 EOF
@@ -339,6 +348,7 @@ ARG PROJECT_DIR
 
 RUN <<EOF
   # Installing ehijing
+  # 
   set -euxo pipefail
   mkdir -p ${PROJECT_DIR}/ehijing_bin
   cd ${PROJECT_DIR}
@@ -374,6 +384,7 @@ ARG HEPMC_INSTALL
 
 RUN <<EOF
   # Installing smash
+  #
   set -euxo pipefail
   mkdir -p ${PROJECT_DIR}/smash_bin
   cd ${PROJECT_DIR}
@@ -449,6 +460,8 @@ COPY python/ ${PROJECT_DIR}/electra_src/python/
 COPY rivet-analyses/ ${PROJECT_DIR}/share/rivet-analyses/
 COPY slurm-scripts/  ${PROJECT_DIR}/share/slurm-scripts/
 COPY utils/          ${PROJECT_DIR}/share/utils/
+COPY tools/          ${PROJECT_DIR}/share/tools/
+COPY input/          ${MNT_DIR}/input/
 
 RUN <<'EOF'
   set -euxo pipefail
@@ -478,7 +491,7 @@ RUN <<'EOF'
   printf "\n\nexport PS1='🔬 %s'\n" "${COMMON_PS1}" >> ~/.bashrc
   mkdir -p /.singularity.d/env
   CUSTOM_ENV=/.singularity.d/env/99-zz_custom_env.sh
-  printf "%s\n\n\nexport PS1='📦 %s'\n\n"\
+  printf "%s\n\n\nexport PS1='🔬 %s'\n\n"\
          '#!/bin/bash'\
          "${COMMON_PS1}" > "${CUSTOM_ENV}"
   chmod 755 "${CUSTOM_ENV}"
@@ -509,7 +522,6 @@ BANNER
 
 echo "Started: $(date)"
 echo "User: $(whoami)"
-echo
 
 exec "$@"
 EOF
