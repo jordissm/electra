@@ -332,10 +332,10 @@ def cmd_ehijing(args: argparse.Namespace) -> None:
     if not config_file.exists():
         raise FileNotFoundError(f"Missing ehijing config file: {config_file}")
 
-    for eid in range(int(args.nevents)):
+    if int(args.nevents) == 1:
         ehijing_task(
             run_dir,
-            eid,
+            int(args.event_id),
             base_seed,
             Z=int(args.Z),
             A=int(args.A),
@@ -344,6 +344,19 @@ def cmd_ehijing(args: argparse.Namespace) -> None:
             table_path=table_path,
             config_file=config_file,
         )
+    if int(args.nevents) > 1:
+        for eid in range(int(args.nevents)):
+            ehijing_task(
+                run_dir,
+                eid,
+                base_seed,
+                Z=int(args.Z),
+                A=int(args.A),
+                mode=int(args.mode),
+                K=float(args.K),
+                table_path=table_path,
+                config_file=config_file,
+            )
 
 
 def cmd_smash(args: argparse.Namespace) -> None:
