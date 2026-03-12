@@ -467,6 +467,9 @@ def build_parser() -> argparse.ArgumentParser:
     per.add_argument("--nevents", type=int, required=True)
     per.add_argument("--seed", type=int, default=12345)
     per.add_argument(
+        "--event-id", type=int, default=0, help="Starting event ID (default: 0)"
+    )
+    per.add_argument(
         "--table-path",
         required=True,
         help="Directory with eHIJING tables, e.g. output/runs/ehijing/tables/K4p0",
@@ -520,6 +523,9 @@ def build_parser() -> argparse.ArgumentParser:
     ppr.add_argument("--config-file", required=True)
     ppr.add_argument("--run-dir", required=True)
     ppr.add_argument("--nevents", type=int, required=True)
+    ppr.add_argument(
+        "--event-id", type=int, default=0, help="Starting event ID (default: 0)"
+    )
     ppr.add_argument("--nreplicas", type=int, required=True)
     ppr.add_argument("--seed", type=int, default=12345)
     ppr.add_argument("--profiles-index", required=True, help="Path to profiles.jsonl")
