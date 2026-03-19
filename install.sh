@@ -72,7 +72,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 mkdir -p "$PREFIX"
-mkdir -p "$OUTPUT_DIR"
+mkdir -p "$OUTPUT_DIR"/runs
 mkdir -p "$INPUT_DIR"
 
 # If requested, materialize a SIF now (so jobs don't hit the registry repeatedly)
@@ -173,7 +173,7 @@ export SINGULARITY_TMPDIR="\$TMPDIR_OPT"
 export APPTAINER_TMPDIR="\$TMPDIR_OPT"
 
 BIND_OUTPUT="\$OUTPUT:/workspace/output"
-BIND_INPUT="\$INPUT:/input"
+BIND_INPUT="\$INPUT:/workspace/input"
 
 if [[ "\$ENGINE" == "docker" ]]; then
 
@@ -192,13 +192,6 @@ if [[ "\$ENGINE" == "docker" ]]; then
   [[ "\$IMG_DOCKER" != *"/"* ]] && PULL_FLAG="--pull=never"
 
   PLATFORM_FLAG=""
-  # HOST_ARCH="\$(uname -m)"
-  # if [[ "\$HOST_ARCH" == "arm64" ]]; then
-  #   IMG_ARCH="\$(\"\${DOCKER[@]}\" image inspect \"\$IMG_DOCKER\" --format '{{.Architecture}}' 2>/dev/null || true)"
-  #   if [[ "\$IMG_ARCH" == "amd64" || "\$IMG_ARCH" == "x86_64" ]]; then
-  #     PLATFORM_FLAG="--platform linux/amd64"
-  #   fi
-  # fi
 
   if [[ "\${#CMD[@]}" -eq 0 ]]; then
     "\${DOCKER[@]}" run \$PULL_FLAG \${PLATFORM_FLAG:-} -it --rm \\
@@ -243,5 +236,5 @@ chmod +x "$PREFIX/electra-shell"
 echo "Environment setup successful."
 echo "Launcher created at: $PREFIX/electra-shell"
 echo "Default output dir: $OUTPUT_DIR"
-[[ -n "$INPUT_DIR" ]] && echo "Default input dir:  $INPUT_DIR"
+echo "Default input dir:  $INPUT_DIR"
 echo "Run: $PREFIX/electra-shell -- electra --help"
