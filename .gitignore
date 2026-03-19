@@ -10,10 +10,7 @@ src/
 
 # ========================
 # Output directories
-run/
-runs/
 output/
-logs/
 
 # ========================
 # Python
@@ -36,6 +33,8 @@ rivet_out_*/**
 electra-shell
 
 # ========================
-old_electra_script
 modified_files/
 
+# ========================
+# Test output
+test/
