@@ -461,7 +461,7 @@ COPY pyproject.toml README.md ${PROJECT_DIR}/electra_src/
 COPY python/ ${PROJECT_DIR}/electra_src/python/
 COPY rivet-analyses/ ${PROJECT_DIR}/share/rivet-analyses/
 COPY utils/          ${PROJECT_DIR}/share/utils/
-COPY input/          ${INPUT_DIR}/
+COPY input/          ${PROJECT_DIR}/share/input-defaults/
 
 RUN <<'EOF'
   set -euxo pipefail
@@ -500,7 +500,12 @@ EOF
 RUN <<'EOF' cat > /usr/local/bin/entrypoint.sh
 #!/usr/bin/env bash
 set -e
-#mkdir -p ${OUTPUT_DIR}/runs
+
+if [ -d /opt/electra/share/input-defaults ] && [ -d /workspace/input ]; then
+  if [ -z "$(ls -A /workspace/input 2>/dev/null)" ]; then
+    cp -a /opt/electra/share/input-defaults/. /workspace/input/
+  fi
+fi
 
 cat <<'BANNER'
 =============================================================================
