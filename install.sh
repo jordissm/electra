@@ -236,13 +236,13 @@ BIND_ARGS=( "--bind" "\$BIND_OUTPUT" )
 if [[ "\${#CMD[@]}" -eq 0 ]]; then
   "\$ENGINE" exec "\${BIND_ARGS[@]}" "\$SIF" \
   /usr/local/bin/entrypoint.sh \
-  /bin/bash -lc "cd \"\$WORKDIR\" && exec /bin/bash"
+  /bin/bash --noprofile --norc -lc "cd \"\$WORKDIR\" && exec /bin/bash --nprofile --norc"
 else
   # Quote CMD safely into a shell command for bash -lc
   printf -v _cmd '%q ' "\${CMD[@]}"
   "\$ENGINE" exec "\${BIND_ARGS[@]}" "\$SIF" \
   /usr/local/bin/entrypoint.sh \
-  /bin/bash -lc "cd \"\$WORKDIR\" && exec \$_cmd"
+  /bin/bash --noprofile --norc -lc "cd \"\$WORKDIR\" && exec \$_cmd"
 fi
 EOF
 
