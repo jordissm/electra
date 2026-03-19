@@ -1,7 +1,7 @@
 
 # ELECTRA Framework (ELectron-ion Event Collision TRAnsport)
 
-Simulation framework designed specifically for modeling electron-ion collision events. Leveraging eHIJING for initial collision event generation and [SMASH](https://smash-transport.github.io) for subsequent hadronic transport. For physics details, please refer to [arXiv:2501:XXXXX](https://www.arxiv.org/abs/2501.XXXXX).
+Simulation framework designed specifically for modeling electron-ion collision events. Leveraging eHIJING for initial collision event generation and [SMASH](https://smash-transport.github.io) for subsequent hadronic transport. For physics details, please refer to [arXiv:2601:XXXXX](https://www.arxiv.org/abs/2601.XXXXX).
 
 ## Overview
 
@@ -12,66 +12,51 @@ This repository provides a framework to simulate electron-ion collision events f
 - *Event generation with eHIJING:*
 - *Hadronic transport with SMASH:*
 - *Modular design:*
-- Test
 
-## Installation
+## Quick Start
 
-### Prerequisites
-
-- C++17 compatible compiler (GCC, Clang)
-- ROOT libraries
-
-### Quick Start
+### SLURM cluster execution
 
 1. Download and execute the `install.sh` script:
 
-'''terminal
-curl -fsSL <https://raw.githubusercontent.com/jordissm/electra/main/install.sh> -o install.sh \
+```terminal
+curl -fsSL https://raw.githubusercontent.com/jordissm/electra/main/install.sh -o install.sh \
+  && chmod +x install.sh \
+  && ./install.sh --pull-sif
+```
+
+1. Execute `ehijing` using the SLURM script provided:
+
+```terminal
+./ehijing_submit.sh NEVENTS=<NEVENTS>
+```
+
+where `<NEVENTS>` should be an integer between `1` and `1000000`.
+
+1. Execute `smash` using the SLURM script provided:
+
+```terminal
+./smash_submit.sh
+```
+
+### Local execution
+
+1. Download and execute the `install.sh` script:
+
+```terminal
+curl -fsSL https://raw.githubusercontent.com/jordissm/electra/main/install.sh -o install.sh \
   && chmod +x install.sh \
   && ./install.sh
-'''
+```
 
 ## Usage
-
-'''terminal
-docker buildx build \
-  --platform linux/arm64 \
-  -t ghcr.io/jordissm/electra:arm64 \
-  -f containers/Docker/Dockerfile \
-  --push \
-  .
-'''
-
-'''terminal
-docker buildx build \
-  --platform linux/amd64 \
-  -t ghcr.io/jordissm/electra:amd64 \
-  -f containers/Docker/Dockerfile \
-  --push \
-  .
-'''
-
-'''terminal
-docker buildx imagetools create \
-  -t ghcr.io/jordissm/electra:latest \
-  ghcr.io/jordissm/electra:amd64 \
-  ghcr.io/jordissm/electra:arm64
-'''
-
-'''terminal
-docker buildx imagetools inspect ghcr.io/jordissm/electra:latest
-'''
-
-'''
-python3 shard_profiles.py --in-dir input/smash/xsec_scaling_factor_profiles/ --out-root run/profiles --out-index run/profiles/profiles.jsonl --mode copy
-'''
 
 ## Citation
 
 If you use ELECTRA in your research, please cite:
 
 ```bibtex
-@article{salinassanmartin2025electra,
+@article{salinassanmartin2026electra,
     title={},
     author={},
     journal={},
