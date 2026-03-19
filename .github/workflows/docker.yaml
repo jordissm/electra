@@ -40,7 +40,6 @@ jobs:
           platforms: linux/amd64
           push: true
           provenance: false
-          progress: plain
           tags: |
             ${{ env.IMAGE_NAME }}:amd64
           cache-from: type=gha,scope=electra-amd64
@@ -74,7 +73,6 @@ jobs:
           platforms: linux/arm64
           push: true
           provenance: false
-          progress: plain
           tags: |
             ${{ env.IMAGE_NAME }}:arm64
           cache-from: type=gha,scope=electra-arm64
