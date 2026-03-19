@@ -38,3 +38,5 @@ modified_files/
 # ========================
 # Test output
 test/
+
+docs/dev/*
