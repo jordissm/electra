@@ -501,12 +501,6 @@ RUN <<'EOF' cat > /usr/local/bin/entrypoint.sh
 #!/usr/bin/env bash
 set -e
 
-if [ -d /opt/electra/share/input-defaults ] && [ -d /workspace/input ]; then
-  if [ -z "$(ls -A /workspace/input 2>/dev/null)" ]; then
-    cp -a /opt/electra/share/input-defaults/. /workspace/input/
-  fi
-fi
-
 cat <<'BANNER'
 =============================================================================
           ,;                    ,;      .,                                  
