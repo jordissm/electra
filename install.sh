@@ -7,7 +7,7 @@ PREFIX_DEFAULT="$PWD"
 
 # Default bind dirs (relative to where install.sh is run)
 OUTPUT_DEFAULT="$PWD/output"
-INPUT_DEFAULT=""
+INPUT_DEFAULT="$PWD/input"
 
 PREFIX="$PREFIX_DEFAULT"
 IMG_DOCKER="$CONTAINER_IMAGE_DOCKER_DEFAULT"
@@ -73,9 +73,7 @@ done
 
 mkdir -p "$PREFIX"
 mkdir -p "$OUTPUT_DIR"
-if [[ -n "$INPUT_DIR" ]]; then
-  mkdir -p "$INPUT_DIR"
-fi
+mkdir -p "$INPUT_DIR"
 
 # If requested, materialize a SIF now (so jobs don't hit the registry repeatedly)
 if [[ "$PULL_SIF" == "1" ]]; then
@@ -174,14 +172,8 @@ export TMPDIR="\$TMPDIR_OPT"
 export SINGULARITY_TMPDIR="\$TMPDIR_OPT"
 export APPTAINER_TMPDIR="\$TMPDIR_OPT"
 
-mkdir -p "\$OUTPUT"
 BIND_OUTPUT="\$OUTPUT:/workspace/output"
-
-BIND_INPUT=""
-if [[ -n "\$INPUT" ]]; then
-  mkdir -p "\$INPUT"
-  BIND_INPUT="\$INPUT:/input"
-fi
+BIND_INPUT="\$INPUT:/input"
 
 if [[ "\$ENGINE" == "docker" ]]; then
 
@@ -236,7 +228,7 @@ BIND_ARGS=( "--bind" "\$BIND_OUTPUT" )
 if [[ "\${#CMD[@]}" -eq 0 ]]; then
   "\$ENGINE" exec "\${BIND_ARGS[@]}" "\$SIF" \
   /usr/local/bin/entrypoint.sh \
-  /bin/bash --noprofile --norc -lc "cd \"\$WORKDIR\" && exec /bin/bash --nprofile --norc"
+  /bin/bash --noprofile --norc -lc "cd \"\$WORKDIR\" && exec /bin/bash --noprofile --norc"
 else
   # Quote CMD safely into a shell command for bash -lc
   printf -v _cmd '%q ' "\${CMD[@]}"
