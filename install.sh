@@ -55,6 +55,43 @@ realpath_py() {
   python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$1"
 }
 
+copy_input_defaults() {
+  local defaults_src="/opt/electra/share/input-defaults"
+
+  if [[ -n "$(find "$INPUT_DIR" -mindepth 1 -maxdepth 1 -print -quit 2>/dev/null)" ]]; then
+    echo "Input dir is not empty, not copying defaults: $INPUT_DIR"
+    return 0
+  fi
+
+  if [[ -n "$SIF_PATH" && -s "$SIF_PATH" ]] && command -v apptainer >/dev/null 2>&1; then
+    echo "Copying input defaults from SIF into: $INPUT_DIR"
+    apptainer exec "$SIF_PATH" /bin/bash -lc \
+      "if [[ -d '$defaults_src' ]]; then tar -C '$defaults_src' -cf - .; fi" \
+      | tar -C "$INPUT_DIR" -xf -
+    return 0
+  fi
+
+  if command -v docker >/dev/null 2>&1; then
+    local docker_ctx
+    docker_ctx="$(docker context show 2>/dev/null || true)"
+    [[ -z "$docker_ctx" ]] && docker_ctx="default"
+
+    if ! docker image inspect "$IMG_DOCKER" >/dev/null 2>&1; then
+      if docker --context desktop-linux image inspect "$IMG_DOCKER" >/dev/null 2>&1; then
+        docker_ctx="desktop-linux"
+      fi
+    fi
+
+    echo "Copying input defaults from Docker image into: $INPUT_DIR"
+    docker --context "$docker_ctx" run --rm "$IMG_DOCKER" /bin/bash -lc \
+      "if [[ -d '$defaults_src' ]]; then tar -C '$defaults_src' -cf - .; fi" \
+      | tar -C "$INPUT_DIR" -xf -
+    return 0
+  fi
+
+  echo "WARNING: could not copy input defaults; no usable SIF or Docker image found."
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -p|--prefix) PREFIX="$(realpath_py "$2")"; shift 2;;
@@ -107,40 +144,7 @@ if [[ "$PULL_SIF" == "1" ]]; then
   ls -lh "$SIF_PATH"
 fi
 
-local defaults_src="/opt/electra/share/input-defaults"
-
-if [[ -n "$(find "$INPUT_DIR" -mindepth 1 -maxdepth 1 -print -quit 2>/dev/null)" ]]; then
-  echo "Input dir is not empty, not copying defaults: $INPUT_DIR"
-  return 0
-fi
-
-if [[ -n "$SIF_PATH" && -s "$SIF_PATH" ]] && command -v apptainer >/dev/null 2>&1; then
-  echo "Copying input defaults from SIF into: $INPUT_DIR"
-  apptainer exec "$SIF_PATH" /bin/bash -lc \
-    "if [[ -d '$defaults_src' ]]; then tar -C '$defaults_src' -cf - .; fi" \
-    | tar -C "$INPUT_DIR" -xf -
-  return 0
-fi
-
-if command -v docker >/dev/null 2>&1; then
-  local docker_ctx
-  docker_ctx="$(docker context show 2>/dev/null || true)"
-  [[ -z "$docker_ctx" ]] && docker_ctx="default"
-
-  if ! docker image inspect "$IMG_DOCKER" >/dev/null 2>&1; then
-    if docker --context desktop-linux image inspect "$IMG_DOCKER" >/dev/null 2>&1; then
-      docker_ctx="desktop-linux"
-    fi
-  fi
-
-  echo "Copying input defaults from Docker image into: $INPUT_DIR"
-  docker --context "$docker_ctx" run --rm "$IMG_DOCKER" /bin/bash -lc \
-    "if [[ -d '$defaults_src' ]]; then tar -C '$defaults_src' -cf - .; fi" \
-    | tar -C "$INPUT_DIR" -xf -
-  return 0
-fi
-
-echo "WARNING: could not copy input defaults; no usable SIF or Docker image found."
+copy_input_defaults
 
 cat > "$PREFIX/electra-shell" <<EOF
 #!/usr/bin/env bash
