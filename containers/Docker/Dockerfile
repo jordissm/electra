@@ -500,7 +500,7 @@ EOF
 RUN <<'EOF' cat > /usr/local/bin/entrypoint.sh
 #!/usr/bin/env bash
 set -e
-mkdir -p ${OUTPUT_DIR}/runs
+#mkdir -p ${OUTPUT_DIR}/runs
 
 cat <<'BANNER'
 =============================================================================
