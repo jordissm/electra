@@ -15,6 +15,8 @@ ARG YQ_VERSION="4.40.3"
 
 ARG PROJECT_DIR="/opt/electra"
 ARG MNT_DIR="/workspace"
+ARG OUTPUT_DIR="${MNT_DIR}/output"
+ARG INPUT_DIR="${MNT_DIR}/input"
 ARG HEPMC_INSTALL="${PROJECT_DIR}/hepmc3_install"
 
 ARG PYTHONPATH=''
@@ -135,10 +137,8 @@ EOF
 
 ENV LD_LIBRARY_PATH=''
 
-WORKDIR ${PROJECT_DIR}
 WORKDIR ${MNT_DIR}
-RUN mkdir -p "${PROJECT_DIR}" "${MNT_DIR}"
-RUN mkdir -p ${MNT_DIR}/output/runs
+RUN mkdir -p "${PROJECT_DIR}" "${MNT_DIR}" "${OUTPUT_DIR}" "${INPUT_DIR}"
 
 # =======================================================
 #                     INSTALL HEPMC3
@@ -306,6 +306,7 @@ ENV LATEXINPUTS="${RIVET_INSTALL_PREFIX}/share/Rivet/texmf/tex:${LATEXINPUTS}"
 # =======================================================
 
 FROM rivet-install AS yq-install
+ARG PROJECT_DIR
 ARG YQ_VERSION
 ARG TARGETARCH
 
@@ -317,7 +318,7 @@ RUN <<EOF
     arm64) YQ_BINARY="yq_linux_arm64" ;;
     *) echo "Unsupported TARGETARCH=${TARGETARCH}" ; exit 1 ;;
   esac
-  cd /opt
+  cd ${PROJECT_DIR}
   wget https://github.com/mikefarah/yq/releases/download/v${YQ_VERSION}/${YQ_BINARY} -O /usr/bin/yq
   chmod +x /usr/bin/yq
 EOF
@@ -340,51 +341,17 @@ RUN <<EOF
   make -j$(nproc)
 EOF
 
-# =======================================================
-#                    INSTALL EHIJING
-# =======================================================
-FROM pythia-install AS ehijing-install
-ARG PROJECT_DIR
-
-RUN <<EOF
-  # Installing ehijing
-  # 
-  set -euxo pipefail
-  mkdir -p ${PROJECT_DIR}/ehijing_bin
-  cd ${PROJECT_DIR}
-  git clone https://github.com/jordissm/ehijing.git
-  cd ehijing/external/pythia8
-  ./configure --cxx-common='-std=c++17 -O3 -fPIC'
-  make -j$(nproc)
-  mkdir -p ${PROJECT_DIR}/ehijing/build
-  cd ${PROJECT_DIR}/ehijing/build
-  cmake -DPYTHIA8_INCLUDE_DIR=${PROJECT_DIR}/ehijing/external/pythia8/include/ \
-        -DPYTHIA8_LIBRARY=${PROJECT_DIR}/ehijing/external/pythia8/lib/libpythia8.a ..
-  make ehijing -j$(nproc)
-  if [[ $? -ne 0 ]]; then
-    echo "Error: 'make ehijing -j$(nproc)' compilation failed!"
-  fi
-  if [[ -f ${PROJECT_DIR}/ehijing/build/ehijing ]]; then
-    cp ${PROJECT_DIR}/ehijing/build/ehijing ${PROJECT_DIR}/ehijing_bin/
-    cp -r ${PROJECT_DIR}/ehijing/config/ ${PROJECT_DIR}/ehijing_bin/
-    cp -r ${PROJECT_DIR}/ehijing/scripts/ ${PROJECT_DIR}/ehijing_bin/
-  else
-    echo "ehijing executable not found! Something went wrong compiling ehijing!"
-    exit 1
-  fi
-EOF
 
 # =======================================================
 #                     INSTALL SMASH
 # =======================================================
 
-FROM ehijing-install AS smash-build
+FROM pythia-install AS smash-build
 ARG PROJECT_DIR
 ARG HEPMC_INSTALL
 
 RUN <<EOF
   # Installing smash
-  #
   set -euxo pipefail
   mkdir -p ${PROJECT_DIR}/smash_bin
   cd ${PROJECT_DIR}
@@ -412,21 +379,54 @@ RUN <<EOF
   fi
 EOF
 
+# =======================================================
+#                    INSTALL EHIJING
+# =======================================================
+FROM smash-build AS ehijing-install
+ARG PROJECT_DIR
+
+RUN <<EOF
+  # Installing ehijing
+  set -euxo pipefail
+  mkdir -p ${PROJECT_DIR}/ehijing_bin
+  cd ${PROJECT_DIR}
+  git clone https://github.com/jordissm/ehijing.git
+  cd ehijing/external/pythia8
+  ./configure --cxx-common='-std=c++17 -O3 -fPIC'
+  make -j$(nproc)
+  mkdir -p ${PROJECT_DIR}/ehijing/build
+  cd ${PROJECT_DIR}/ehijing/build
+  cmake -DPYTHIA8_INCLUDE_DIR=${PROJECT_DIR}/ehijing/external/pythia8/include/ \
+        -DPYTHIA8_LIBRARY=${PROJECT_DIR}/ehijing/external/pythia8/lib/libpythia8.a ..
+  make ehijing -j$(nproc)
+  if [[ $? -ne 0 ]]; then
+    echo "Error: 'make ehijing -j$(nproc)' compilation failed!"
+  fi
+  if [[ -f ${PROJECT_DIR}/ehijing/build/ehijing ]]; then
+    cp ${PROJECT_DIR}/ehijing/build/ehijing ${PROJECT_DIR}/ehijing_bin/
+    cp -r ${PROJECT_DIR}/ehijing/config/ ${PROJECT_DIR}/ehijing_bin/
+    cp -r ${PROJECT_DIR}/ehijing/scripts/ ${PROJECT_DIR}/ehijing_bin/
+  else
+    echo "ehijing executable not found! Something went wrong compiling ehijing!"
+    exit 1
+  fi
+EOF
+
 
 # =======================================================
 #                 CLEANUP AND FINAL IMAGE
 # =======================================================
 
-FROM smash-build AS final-image
+FROM ehijing-install AS final-image
 ARG PROJECT_DIR
 ARG MNT_DIR
+ARG OUTPUT_DIR
+ARG INPUT_DIR
 ARG HEPMC_VERSION
 ARG CPPCHECK_VERSION
 ARG CPPLINT_VERSION
 ARG ROOT_VERSION
 ARG RIVET_BUILD_PREFIX
-
-ENV MNT_DIR="${MNT_DIR}"
 
 RUN <<EOF
   # Finalizing and producing final image
@@ -458,10 +458,8 @@ EOF
 COPY pyproject.toml README.md ${PROJECT_DIR}/electra_src/
 COPY python/ ${PROJECT_DIR}/electra_src/python/
 COPY rivet-analyses/ ${PROJECT_DIR}/share/rivet-analyses/
-COPY slurm-scripts/  ${PROJECT_DIR}/share/slurm-scripts/
 COPY utils/          ${PROJECT_DIR}/share/utils/
-COPY tools/          ${PROJECT_DIR}/share/tools/
-COPY input/          ${MNT_DIR}/input/
+COPY input/          ${INPUT_DIR}/
 
 RUN <<'EOF'
   set -euxo pipefail
@@ -500,7 +498,7 @@ EOF
 RUN <<'EOF' cat > /usr/local/bin/entrypoint.sh
 #!/usr/bin/env bash
 set -e
-mkdir -p ${MNT_DIR}/output/runs
+mkdir -p ${OUTPUT_DIR}/runs
 
 cat <<'BANNER'
 =============================================================================
