@@ -1,7 +1,7 @@
 TODO List
 =========
 
-[ ] Set up CI pipeline
+[X] Set up CI pipeline
 [ ] Compare to eHIJING-examples
 [ ] Verify computation of zh in Rivet script
 [ ] Implement eHIJING batch setup
