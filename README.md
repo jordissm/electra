@@ -12,6 +12,7 @@ This repository provides a framework to simulate electron-ion collision events f
 - *Event generation with eHIJING:*
 - *Hadronic transport with SMASH:*
 - *Modular design:*
+- Test
 
 ## Installation
 
