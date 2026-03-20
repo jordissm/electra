@@ -111,9 +111,8 @@ fi
 if [[ -z "$(find "$INPUT_DIR" -mindepth 1 -maxdepth 1 -print -quit 2>/dev/null)" ]]; then
   if [[ -n "$SIF_PATH" && -s "$SIF_PATH" ]] && command -v apptainer >/dev/null 2>&1; then
     echo "Copying default input files from SIF into: $INPUT_DIR"
-    apptainer exec "$SIF_PATH" /bin/bash -lc \
-      'if [[ -d /opt/electra/share/input-defaults ]]; then cp -a /opt/electra/share/input-defaults/. /mnt; fi' \
-      --bind "$INPUT_DIR:/mnt"
+    apptainer exec --bind "$INPUT_DIR:/workspace/input/" "$SIF_PATH" /bin/bash -c \
+      'if [[ -d /opt/electra/share/input-defaults ]]; then cp -a /opt/electra/share/input-defaults/. /workspace/input/; fi'
   elif command -v docker >/dev/null 2>&1; then
     echo "Copying default input files from Docker image into: $INPUT_DIR"
     docker run --rm \
