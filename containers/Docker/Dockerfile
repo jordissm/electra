@@ -462,6 +462,7 @@ COPY python/ ${PROJECT_DIR}/electra_src/python/
 COPY rivet-analyses/ ${PROJECT_DIR}/share/rivet-analyses/
 COPY utils/          ${PROJECT_DIR}/share/utils/
 COPY input/          ${PROJECT_DIR}/share/input-defaults/
+COPY slurm-scripts/  ${PROJECT_DIR}/share/slurm-scripts/
 
 RUN <<'EOF'
   set -euxo pipefail

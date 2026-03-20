@@ -8,6 +8,7 @@ PREFIX_DEFAULT="$PWD"
 # Default bind dirs (relative to where install.sh is run)
 OUTPUT_DEFAULT="$PWD/output"
 INPUT_DEFAULT="$PWD/input"
+SLURM_SCRIPTS_DEFAULT="$PWD/slurm-scripts"
 
 PREFIX="$PREFIX_DEFAULT"
 IMG_DOCKER="$CONTAINER_IMAGE_DOCKER_DEFAULT"
@@ -15,6 +16,7 @@ SIF_PATH="$CONTAINER_IMAGE_APPTAINER_DEFAULT"
 TMPDIR_OPT="${TMPDIR:-/tmp}"
 OUTPUT_DIR="$OUTPUT_DEFAULT"
 INPUT_DIR="$INPUT_DEFAULT"
+SLURM_SCRIPTS_DIR="$SLURM_SCRIPTS_DEFAULT"
 
 SIF_DIR_DEFAULT="${SIF_DIR_DEFAULT:-/scratch/$USER/containers}"
 SIF_NAME_DEFAULT="electra.sif"
@@ -63,6 +65,7 @@ while [[ $# -gt 0 ]]; do
     -t|--tmpdir) TMPDIR_OPT="$2"; shift 2;;
     --output)    OUTPUT_DIR="$(realpath_py "$2")"; shift 2;;
     --input)     INPUT_DIR="$(realpath_py "$2")"; shift 2;;
+    --slurm-scripts) SLURM_SCRIPTS_DIR="$(realpath_py "$2")"; shift 2;;
     --pull-sif)  PULL_SIF="1"; shift 1;;
     --sif-dir)   SIF_DIR="$(realpath_py "$2")"; shift 2;;
     --sif-name)  SIF_NAME="$2"; shift 2;;
@@ -74,6 +77,12 @@ done
 mkdir -p "$PREFIX"
 mkdir -p "$OUTPUT_DIR"/runs
 mkdir -p "$INPUT_DIR"
+
+ON_CLUSTER="0"
+if command -v sbatch >/dev/null 2>&1 || command -v srun >/dev/null 2>&1 || [[ -n "${SLURM_CLUSTER_NAME:-}" || -n "${SLURM_JOB_ID:-}" ]]; then
+  ON_CLUSTER="1"
+  mkdir -p "$SLURM_SCRIPTS_DIR"
+fi
 
 # If requested, materialize a SIF now (so jobs don't hit the registry repeatedly)
 if [[ "$PULL_SIF" == "1" ]]; then
@@ -116,14 +125,34 @@ if [[ -z "$(find "$INPUT_DIR" -mindepth 1 -maxdepth 1 -print -quit 2>/dev/null)"
   elif command -v docker >/dev/null 2>&1; then
     echo "Copying default input files from Docker image into: $INPUT_DIR"
     docker run --rm \
-      -v "$INPUT_DIR:/mnt" \
+      -v "$INPUT_DIR:/workspace/input/" \
       "$IMG_DOCKER" \
-      /bin/bash -lc 'if [[ -d /opt/electra/share/input-defaults ]]; then cp -a /opt/electra/share/input-defaults/. /mnt; fi'
+      /bin/bash -lc 'if [[ -d /opt/electra/share/input-defaults ]]; then cp -a /opt/electra/share/input-defaults/. /workspace/input/; fi'
   else
     echo "WARNING: could not copy default input files; no SIF or Docker source available."
   fi
 else
   echo "Input dir is not empty, not copying defaults: $INPUT_DIR"
+fi
+
+if [[ "$ON_CLUSTER" == "1" ]]; then
+  if [[ -z "$(find "$SLURM_SCRIPTS_DIR" -mindepth 1 -maxdepth 1 -print -quit 2>/dev/null)" ]]; then
+    if [[ -n "$SIF_PATH" && -s "$SIF_PATH" ]] && command -v apptainer >/dev/null 2>&1; then
+      echo "Copying SLURM scripts from SIF into: $SLURM_SCRIPTS_DIR"
+      apptainer exec --bind "$SLURM_SCRIPTS_DIR:/workspace/input/" "$SIF_PATH" \
+        /bin/bash -c 'if [[ -d /opt/electra/share/slurm-scripts ]]; then cp -a /opt/electra/share/slurm-scripts/. /workspace/input/; fi'
+    elif command -v docker >/dev/null 2>&1; then
+      echo "Copying SLURM scripts from Docker image into: $SLURM_SCRIPTS_DIR"
+      docker run --rm \
+        -v "$SLURM_SCRIPTS_DIR:/workspace/input/" \
+        "$IMG_DOCKER" \
+        /bin/bash -c 'if [[ -d /opt/electra/share/slurm-scripts ]]; then cp -a /opt/electra/share/slurm-scripts/. /workspace/input/; fi'
+    else
+      echo "WARNING: could not copy SLURM scripts; no SIF or Docker source available."
+    fi
+  else
+    echo "SLURM scripts dir is not empty, not copying defaults: $SLURM_SCRIPTS_DIR"
+  fi
 fi
 
 cat > "$PREFIX/electra-shell" <<EOF
