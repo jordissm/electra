@@ -107,6 +107,26 @@ if [[ "$PULL_SIF" == "1" ]]; then
   ls -lh "$SIF_PATH"
 fi
 
+# Populate host input dir with packaged defaults only if empty
+if [[ -z "$(find "$INPUT_DIR" -mindepth 1 -maxdepth 1 -print -quit 2>/dev/null)" ]]; then
+  if [[ -n "$SIF_PATH" && -s "$SIF_PATH" ]] && command -v apptainer >/dev/null 2>&1; then
+    echo "Copying default input files from SIF into: $INPUT_DIR"
+    apptainer exec "$SIF_PATH" /bin/bash -lc \
+      'if [[ -d /opt/electra/share/input-defaults ]]; then cp -a /opt/electra/share/input-defaults/. /mnt; fi' \
+      --bind "$INPUT_DIR:/mnt"
+  elif command -v docker >/dev/null 2>&1; then
+    echo "Copying default input files from Docker image into: $INPUT_DIR"
+    docker run --rm \
+      -v "$INPUT_DIR:/mnt" \
+      "$IMG_DOCKER" \
+      /bin/bash -lc 'if [[ -d /opt/electra/share/input-defaults ]]; then cp -a /opt/electra/share/input-defaults/. /mnt; fi'
+  else
+    echo "WARNING: could not copy default input files; no SIF or Docker source available."
+  fi
+else
+  echo "Input dir is not empty, not copying defaults: $INPUT_DIR"
+fi
+
 cat > "$PREFIX/electra-shell" <<EOF
 #!/usr/bin/env bash
 set -euo pipefail
