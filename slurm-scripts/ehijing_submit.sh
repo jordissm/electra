@@ -110,6 +110,7 @@ CHUNK_SIZE="${CHUNK_SIZE}"
 mkdir -p "${LOG_DIR}"
 
 TASK_ID=\${SLURM_ARRAY_TASK_ID}
+TASK_TABLE_PATH="\${TABLE_PATH}/\${TASK_ID}"
 FIRST_EVENT_ID=\$(( TASK_ID * CHUNK_SIZE ))
 REMAINING=\$(( NEVENTS - FIRST_EVENT_ID ))
 
@@ -137,7 +138,7 @@ apptainer exec \
             --A ${A} \
             --mode ${MODE} \
             --run-dir \${RUN_DIR_CONT}/runs \
-            --table-path \${TABLE_PATH} \
+            --table-path \${TASK_TABLE_PATH} \
             --config-file \${CONFIG_PATH} \
             --nevents \${TASK_NEVENTS} \
             --first-event-id \${FIRST_EVENT_ID} \
