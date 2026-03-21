@@ -39,7 +39,10 @@ MODE=0
 K=4.0
 TABLE_PATH="${TABLE_PATH:-$RUN_DIR_CONT/runs/ehijing/tables/K}"
 CONFIG_PATH="${CONFIG_PATH:-/workspace/input/ehijing/hermes.setting}"
+
 NEVENTS="${NEVENTS:-1}"
+CHUNK_SIZE="${CHUNK_SIZE:-1000}"
+
 
 LOG_DIR="$RUN_DIR_HOST/runs/ehijing/logs"
 
@@ -51,10 +54,26 @@ if ! [[ "$NEVENTS" =~ ^[1-9][0-9]*$ ]]; then
             exit 1
 fi
 
-ARRAY_RANGE="0-$((NEVENTS - 1))"
+if ! [[ "$CHUNK_SIZE" =~ ^[1-9][0-9]*$ ]]; then
+    echo "Error: CHUNK_SIZE must be a positive integer, got '$CHUNK_SIZE'" >&2
+    exit 1
+fi
+
+
+# -----------------------------
+# Compute number of array tasks
+# -----------------------------
+NUM_CHUNKS=$(( (NEVENTS + CHUNK_SIZE - 1) / CHUNK_SIZE ))
+ARRAY_RANGE="0-$((NUM_CHUNKS - 1))"
 
 
 mkdir -p "$LOG_DIR"
+
+echo "Submitting eHIJING run:"
+echo "  total events : $NEVENTS"
+echo "  chunk size   : $CHUNK_SIZE"
+echo "  num chunks   : $NUM_CHUNKS"
+echo "  array range  : $ARRAY_RANGE"
 
 # -----------------------------
 # Submit the SLURM job
@@ -83,6 +102,20 @@ CONFIG_PATH="${CONFIG_PATH}"
 
 mkdir -p "${LOG_DIR}"
 
+TASK_ID=\${SLURM_ARRAY_TASK_ID}
+FIRST_EVENT_ID=\$(( TASK_ID * CHUNK_SIZE ))
+REMAINING=\$(( NEVENTS - FIRST_EVENT_ID ))
+
+if (( REMAINING <= 0 )); then
+    echo "Nothing to do for task \$TASK_ID"
+    exit 0
+fi
+
+if (( REMAINING < CHUNK_SIZE )); then
+    TASK_NEVENTS=\${REMAINING}
+else
+    TASK_NEVENTS=\${CHUNK_SIZE}
+fi
 
 apptainer exec \
     --cleanenv \
@@ -99,24 +132,25 @@ apptainer exec \
             --run-dir \${RUN_DIR_CONT}/runs \
             --table-path \${TABLE_PATH} \
             --config-file \${CONFIG_PATH} \
-            --nevents ${NEVENTS} \
+            --nevents \${TASK_NEVENTS} \
+            --first-event-id \${FIRST_EVENT_ID}
     "
 EOF
 )
 
-sbatch --dependency=afterok:${ARRAY_JOB_ID} <<EOF
-#!/bin/bash
-#SBATCH -J ${JOB_NAME}:post
-#SBATCH -A ${ACCOUNT}
-#SBATCH -p ${PARTITION}
-#SBATCH -t 00:10:00
-#SBATCH --cpus-per-task=1
-#SBATCH --mem=1G
-#SBATCH -o /dev/null
-#SBATCH -e /dev/null
+# sbatch --dependency=afterok:${ARRAY_JOB_ID} <<EOF
+# #!/bin/bash
+# #SBATCH -J ${JOB_NAME}:post
+# #SBATCH -A ${ACCOUNT}
+# #SBATCH -p ${PARTITION}
+# #SBATCH -t 00:10:00
+# #SBATCH --cpus-per-task=1
+# #SBATCH --mem=1G
+# #SBATCH -o /dev/null
+# #SBATCH -e /dev/null
 
-set -euo pipefail
+# set -euo pipefail
 
-cat ${RUN_DIR_HOST}/runs/ehijing/events/*.meta.json > ${RUN_DIR_HOST}/runs/ehijing/events/run.meta.json
+# cat ${RUN_DIR_HOST}/runs/ehijing/events/*.meta.json > ${RUN_DIR_HOST}/runs/ehijing/events/run.meta.json
 
-EOF
+# EOF

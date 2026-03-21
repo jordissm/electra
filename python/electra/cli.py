@@ -121,7 +121,8 @@ def run_layout(run_dir: Path) -> Dict[str, Path]:
 
 def ehijing_task(
     run_dir: Path,
-    event_id: int,
+    first_event_id: int,
+    nevents: int,
     base_seed: int,
     *,
     Z: int,
@@ -137,11 +138,12 @@ def ehijing_task(
 
     events_dir = layout["ehijing_events"]
 
-    # Your ehijing writes evt_000000.oscar etc into an output directory.
-    # We mark completion per event_id once that file exists.
-    out_evt = events_dir / f"evt_{event_id:06d}.oscar"
-    done = out_evt.with_suffix(".done")
-    if done.exists():
+    if nevents <= 0:
+        return
+
+    # Optional chunk-level done marker
+    chunk_done = events_dir / f".chunk_{first_event_id:08d}_{nevents}.done"
+    if chunk_done.exists():
         return
 
     # Ensure tables + events dirs exist (fixes your earlier filesystem error)
@@ -151,22 +153,16 @@ def ehijing_task(
     # Your current ehijing main.cpp does NOT accept a seed argument,
     # so we can only *record* a deterministic seed for now.
     PYTHIA_SEED_MAX = 900_000_000  # Pythia8 allowed max
-    seed = 1 + (hash_seed(base_seed, event_id) % PYTHIA_SEED_MAX)
-
-    # Run into a unique temp dir to avoid filename collisions
-    tmp_out = events_dir / f".tmp_evt_{event_id:06d}"
-    if tmp_out.exists():
-        shutil.rmtree(tmp_out)
-    mkdir(tmp_out)
+    seed = 1 + (hash_seed(base_seed, first_event_id, nevents) % PYTHIA_SEED_MAX)
 
     # Run one triggered event per call, and write into the events directory.
     # NOTE: table_path is a directory; config_file is the .setting file.
     cmd = [
         "ehijing",
         "--nevents",
-        "1",
-        "--event-id",
-        str(event_id),
+        str(nevents),
+        "--first-event-id",
+        str(first_event_id),
         "--Z",
         str(Z),
         "--A",
@@ -178,7 +174,7 @@ def ehijing_task(
         "--table-dir",
         str(Path(table_path)),
         "--run-dir",
-        str(tmp_out),
+        str(events_dir),
         "--config-file",
         str(Path(config_file)),
         "--seed",
@@ -187,44 +183,11 @@ def ehijing_task(
 
     run(cmd)
 
-    produced_oscar = sorted(tmp_out.glob("evt_*.oscar"))
-    if len(produced_oscar) != 1:
-        raise RuntimeError(
-            f"ehijing produced {len(produced_oscar)} OSCAR files in {tmp_out}, expected 1.\n"
-            f"Files: {[p.name for p in produced_oscar]}"
-        )
-
-    src_oscar = produced_oscar[0]
-    src_stem = src_oscar.stem  # e.g. "evt_000000"
-    dst_stem = f"evt_{event_id:06d}"  # e.g. "evt_000001"
-
-    # Move OSCAR
-    dst_oscar = events_dir / f"{dst_stem}.oscar"
-    src_oscar.replace(dst_oscar)
-
-    # Move sidecars that belong to the same event
-    # (keeps any future extra sidecars without hardcoding extensions)
-    for src in tmp_out.glob(f"{src_stem}.*"):
-        if src.name == f"{src_stem}.oscar":
-            continue  # already moved
-
-        # preserve the suffixes after the stem, e.g. ".meta.json"
-        suffix_part = src.name[len(src_stem) :]  # includes leading dot(s)
-        dst = events_dir / f"{dst_stem}{suffix_part}"
-        src.replace(dst)
-
-    # Now safe to remove temp dir
-    shutil.rmtree(tmp_out, ignore_errors=True)
-
-    # Optional: sanity check meta exists if you require it
-    dst_meta = events_dir / f"{dst_stem}.meta.json"
-    if not dst_meta.exists():
-        raise RuntimeError(f"Missing expected metadata sidecar: {dst_meta}")
-
-    atomic_done_marker(done)
+    atomic_done_marker(chunk_done)
 
     record = {
-        "event_id": event_id,
+        "first_event_id": first_event_id,
+        "nevents": nevents,
         "ehijing_seed": seed,  # recorded (not yet used by ehijing)
         "Z": Z,
         "A": A,
@@ -232,7 +195,7 @@ def ehijing_task(
         "K": K,
         "table_path": str(Path(table_path)),
         "config_file": str(Path(config_file)),
-        "path": str(out_evt),
+        "events_dir": str(events_dir),
     }
 
     with layout["manifest"].open("a", encoding="utf-8") as f:
@@ -262,7 +225,7 @@ def smash_physical_event_task(
     """
     layout = run_layout(run_dir)
 
-    event_tag = event_file.stem  # "evt_000123"
+    event_tag = event_file.stem  # "evt_00000123"
     profile_id = str(profile_rec["id"])
 
     out_dir = layout["smash"] / event_tag / f"profile_{profile_id}"
@@ -332,31 +295,18 @@ def cmd_ehijing(args: argparse.Namespace) -> None:
     if not config_file.exists():
         raise FileNotFoundError(f"Missing ehijing config file: {config_file}")
 
-    if int(args.nevents) == 1:
-        ehijing_task(
-            run_dir,
-            int(args.event_id),
-            base_seed,
-            Z=int(args.Z),
-            A=int(args.A),
-            mode=int(args.mode),
-            K=float(args.K),
-            table_path=table_path,
-            config_file=config_file,
-        )
-    if int(args.nevents) > 1:
-        for eid in range(int(args.nevents)):
-            ehijing_task(
-                run_dir,
-                eid,
-                base_seed,
-                Z=int(args.Z),
-                A=int(args.A),
-                mode=int(args.mode),
-                K=float(args.K),
-                table_path=table_path,
-                config_file=config_file,
-            )
+    ehijing_task(
+        run_dir,
+        int(args.first_event_id),
+        int(args.nevents),
+        base_seed,
+        Z=int(args.Z),
+        A=int(args.A),
+        mode=int(args.mode),
+        K=float(args.K),
+        table_path=table_path,
+        config_file=config_file,
+    )
 
 
 def cmd_smash(args: argparse.Namespace) -> None:
@@ -368,9 +318,11 @@ def cmd_smash(args: argparse.Namespace) -> None:
     if not events_dir.exists():
         raise FileNotFoundError(f"Missing eHIJING events directory: {events_dir}")
 
-    event_files = sorted(events_dir.glob("evt_*.oscar"))
+    event_files = sorted(events_dir.rglob("event_*.oscar"))
     if not event_files:
-        raise FileNotFoundError(f"No per-event OSCAR files found in: {events_dir}")
+        raise FileNotFoundError(
+            f"No sharded eHIJING OSCAR files found in: {events_dir}"
+        )
 
     # Determine E (events)
     E_req = int(args.nevents)
@@ -480,7 +432,10 @@ def build_parser() -> argparse.ArgumentParser:
     per.add_argument("--nevents", type=int, required=True)
     per.add_argument("--seed", type=int, default=12345)
     per.add_argument(
-        "--event-id", type=int, default=0, help="Starting event ID (default: 0)"
+        "--first-event-id",
+        type=int,
+        default=0,
+        help="Global first event ID for this chunk (default: 0)",
     )
     per.add_argument(
         "--table-path",
@@ -537,7 +492,10 @@ def build_parser() -> argparse.ArgumentParser:
     ppr.add_argument("--run-dir", required=True)
     ppr.add_argument("--nevents", type=int, required=True)
     ppr.add_argument(
-        "--event-id", type=int, default=0, help="Starting event ID (default: 0)"
+        "--first-event-id",
+        type=int,
+        default=0,
+        help="Global first event ID for this chunk (default: 0)",
     )
     ppr.add_argument("--nreplicas", type=int, required=True)
     ppr.add_argument("--seed", type=int, default=12345)
