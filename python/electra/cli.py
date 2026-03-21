@@ -123,6 +123,7 @@ def ehijing_task(
     run_dir: Path,
     first_event_id: int,
     nevents: int,
+    chunk_size: Optional[int],
     base_seed: int,
     *,
     Z: int,
@@ -163,6 +164,8 @@ def ehijing_task(
         str(nevents),
         "--first-event-id",
         str(first_event_id),
+        "--chunk-size",
+        str(chunk_size) if chunk_size is not None else str(nevents),
         "--Z",
         str(Z),
         "--A",
@@ -188,6 +191,7 @@ def ehijing_task(
     record = {
         "first_event_id": first_event_id,
         "nevents": nevents,
+        "chunk_size": chunk_size,
         "ehijing_seed": seed,  # recorded (not yet used by ehijing)
         "Z": Z,
         "A": A,
@@ -299,6 +303,7 @@ def cmd_ehijing(args: argparse.Namespace) -> None:
         run_dir,
         int(args.first_event_id),
         int(args.nevents),
+        int(args.chunk_size) if hasattr(args, "chunk_size") else None,
         base_seed,
         Z=int(args.Z),
         A=int(args.A),
@@ -438,6 +443,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Global first event ID for this chunk (default: 0)",
     )
     per.add_argument(
+        "--chunk-size",
+        type=int,
+        default=None,
+        help="Optional chunk size for eHIJING runs (default: 1, i.e. no chunking)",
+    )
+    per.add_argument(
         "--table-path",
         required=True,
         help="Directory with eHIJING tables, e.g. output/runs/ehijing/tables/K4p0",
@@ -496,6 +507,12 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=0,
         help="Global first event ID for this chunk (default: 0)",
+    )
+    ppr.add_argument(
+        "--chunk-size",
+        type=int,
+        default=None,
+        help="Optional chunk size for eHIJING runs (default: 1, i.e. no chunking)",
     )
     ppr.add_argument("--nreplicas", type=int, required=True)
     ppr.add_argument("--seed", type=int, default=12345)

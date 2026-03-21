@@ -140,7 +140,8 @@ apptainer exec \
             --table-path \${TABLE_PATH} \
             --config-file \${CONFIG_PATH} \
             --nevents \${TASK_NEVENTS} \
-            --first-event-id \${FIRST_EVENT_ID}
+            --first-event-id \${FIRST_EVENT_ID} \
+            --chunk-size \${CHUNK_SIZE} \
     "
 EOF
 )
