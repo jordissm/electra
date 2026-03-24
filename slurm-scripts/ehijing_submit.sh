@@ -38,7 +38,7 @@ A=2
 MODE=0
 K=4.0
 TABLE_PATH="${TABLE_PATH:-$RUN_DIR_CONT/runs/ehijing/tables/K}"
-CONFIG_PATH="${CONFIG_PATH:-/workspace/input/ehijing/hermes.setting}"
+CONFIG_PATH="${CONFIG_PATH:-/projects/illinois/eng/physics/jnorhos/jordi/electra/input/ehijing/hermes.setting}"
 
 NEVENTS="${NEVENTS:-1}"
 CHUNK_SIZE="${CHUNK_SIZE:-1000}"

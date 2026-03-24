@@ -215,6 +215,7 @@ def smash_physical_event_task(
     *,
     run_dir: Path,
     event_file: Path,
+    cfg_path: Path,
     profile_rec: Dict[str, Any],
     profiles_root: Path,
     nreplicas: int,
@@ -239,7 +240,7 @@ def smash_physical_event_task(
 
     mkdir(out_dir)
 
-    cfg = (run_dir / "config.yaml").resolve()
+    cfg = cfg_path.resolve()
     if not cfg.exists():
         raise FileNotFoundError(f"Missing universal SMASH config: {cfg}")
 
@@ -250,7 +251,7 @@ def smash_physical_event_task(
         )
 
     # Deterministic seed per (physical event, profile)
-    smash_seed = hash_seed(base_seed, event_tag)
+    smash_seed = hash_seed(base_seed, event_tag, profile_id)
 
     cmd = [
         "smash",
@@ -323,19 +324,27 @@ def cmd_smash(args: argparse.Namespace) -> None:
     if not events_dir.exists():
         raise FileNotFoundError(f"Missing eHIJING events directory: {events_dir}")
 
-    event_files = sorted(events_dir.rglob("event_*.oscar"))
-    if not event_files:
+    event_files_all = sorted(events_dir.rglob("event_*.oscar"))
+    if not event_files_all:
         raise FileNotFoundError(
             f"No sharded eHIJING OSCAR files found in: {events_dir}"
         )
 
-    # Determine E (events)
+    first_event_id = int(args.first_event_id)
+    if first_event_id < 0:
+        raise ValueError("--first-event-id must be >= 0")
+
     E_req = int(args.nevents)
-    event_files = event_files[:E_req]
+    if E_req <= 0:
+        raise ValueError("--nevents must be > 0")
+
+    event_files = event_files_all[first_event_id : first_event_id + E_req]
     E = len(event_files)
+
     if E == 0:
         raise FileNotFoundError(
-            f"Requested nevents={E_req} but no events found in {events_dir}"
+            f"Requested event slice [{first_event_id}, {first_event_id + E_req}) "
+            f"but no events were found in {events_dir}"
         )
 
     profiles_index = Path(args.profiles_index).resolve()
@@ -391,6 +400,7 @@ def cmd_smash(args: argparse.Namespace) -> None:
         smash_physical_event_task(
             run_dir=run_dir,
             event_file=ev,
+            cfg_path=Path(args.config_file).resolve(),
             profile_rec=prof,
             profiles_root=profiles_root,
             nreplicas=int(args.nreplicas),
@@ -404,6 +414,7 @@ def cmd_smash(args: argparse.Namespace) -> None:
             smash_physical_event_task(
                 run_dir=run_dir,
                 event_file=ev,
+                cfg_path=Path(args.config_file).resolve(),
                 profile_rec=prof,
                 profiles_root=profiles_root,
                 nreplicas=int(args.nreplicas),
@@ -465,6 +476,7 @@ def build_parser() -> argparse.ArgumentParser:
     sps = ps.add_subparsers(dest="sub", required=True)
     psr = sps.add_parser("run")
     psr.add_argument("--run-dir", required=True)
+    psr.add_argument("--config-file", required=True, help="Universal SMASH config.yaml")
     psr.add_argument("--nevents", type=int, required=True)
     psr.add_argument("--nreplicas", type=int, required=True)
     psr.add_argument("--seed", type=int, default=98765)
@@ -487,6 +499,12 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=None,
         help="Run exactly one task (event_idx, profile_idx) mapped from task-id.",
+    )
+    psr.add_argument(
+        "--first-event-id",
+        type=int,
+        default=0,
+        help="Global first event index to process from the sorted eHIJING event list",
     )
     psr.set_defaults(func=cmd_smash)
 
