@@ -19,7 +19,6 @@ import subprocess
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-
 # -----------------------------------------------------------------------------
 # Utilities
 # -----------------------------------------------------------------------------
@@ -233,7 +232,7 @@ def smash_physical_event_task(
     event_tag = event_file.stem  # "evt_00000123"
     profile_id = str(profile_rec["id"])
 
-    out_dir = layout["smash"] / event_tag / f"profile_{profile_id}"
+    out_dir = layout["smash"] / "events" / event_tag / f"profile_{profile_id}"
     done = out_dir / ".done"
     if done.exists():
         return

@@ -91,6 +91,7 @@ NEVENTS="${NEVENTS}"
 CHUNK_SIZE="${CHUNK_SIZE}"
 NREPLICAS="${NREPLICAS}"
 NPROFILES="${NPROFILES}"
+TASK_MODE="${TASK_MODE}"
 
 mkdir -p "\${LOG_DIR}"
 
@@ -137,5 +138,5 @@ for TASK_ID in \$(seq 0 \$((NTASKS - 1))); do
                 --first-event-id \${FIRST_EVENT_ID} \
                 --task-id \${TASK_ID}
         "
-    EOF
 done
+EOF
