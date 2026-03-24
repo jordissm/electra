@@ -4,9 +4,9 @@ TODO List
 [X] Set up CI pipeline
 [ ] Compare to eHIJING-examples
 [ ] Verify computation of zh in Rivet script
-[ ] Implement eHIJING batch setup
-[ ] Implement eHIJING output sharding
-[ ] Implement eHIJING binary output
+[X] Implement eHIJING batch setup
+[X] Implement eHIJING output sharding
+[ ] Make SMASH read eHIJING sharded output
 [ ] Wire output to scratch directory
 [ ] Implement Rivet run outside container
 [X] Automate run.meta.json
