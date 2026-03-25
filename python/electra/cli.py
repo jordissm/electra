@@ -41,6 +41,24 @@ def hash_seed(*items: Any, bits: int = 63) -> int:
     return int(h.hexdigest(), 16) & ((1 << bits) - 1)
 
 
+def parse_event_id_from_path(event_file: Path) -> int:
+    """
+    Accepts names like:
+      event_00000000.oscar
+      event_00000000
+    """
+    name = event_file.stem if event_file.suffix else event_file.name
+    if not name.startswith("event_"):
+        raise ValueError(f"Could not parse event id from filename: {event_file}")
+    return int(name[len("event_") :])
+
+
+def event_shard_dir(base: Path, event_id: int, shard_size: int = 1000) -> Path:
+    lo = (event_id // shard_size) * shard_size
+    hi = lo + shard_size - 1
+    return base / f"events_{lo:08d}-{hi:08d}"
+
+
 def run(
     cmd: List[str], cwd: Optional[Path] = None, env: Optional[Dict[str, str]] = None
 ) -> None:
@@ -229,11 +247,14 @@ def smash_physical_event_task(
     """
     layout = run_layout(run_dir)
 
-    event_tag = event_file.stem  # "evt_00000123"
+    event_id = parse_event_id_from_path(event_file)
+    event_tag = f"event_{event_id:08d}"
     profile_id = str(profile_rec["id"])
 
-    out_dir = layout["smash"] / "events" / event_tag / f"profile_{profile_id}"
+    shard_dir = event_shard_dir(layout["smash"] / "events", event_id, shard_size=1000)
+    out_dir = shard_dir / event_tag / f"profile_{profile_id}"
     done = out_dir / ".done"
+
     if done.exists():
         return
 
