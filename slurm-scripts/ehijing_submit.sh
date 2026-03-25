@@ -33,8 +33,8 @@ IMG="${IMG:-/scratch/$USER/containers/electra.sif}"
 
 RUN_DIR_CONT="${RUN_DIR_CONT:-/workspace/output}"
 
-Z=1
-A=2
+Z=36
+A=84
 MODE=0
 K=4.0
 TABLE_PATH="${TABLE_PATH:-$RUN_DIR_CONT/runs/ehijing/tables/K}"
