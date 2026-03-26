@@ -2,11 +2,14 @@ TODO List
 =========
 
 [X] Set up CI pipeline
-[ ] Compare to eHIJING-examples
-[ ] Verify computation of zh in Rivet script
 [X] Implement eHIJING batch setup
 [X] Implement eHIJING output sharding
-[ ] Make SMASH read eHIJING sharded output
+[X] Make SMASH read eHIJING sharded output
+[X] Automate run.meta.json
+[X] Refactor eHIJING
+[X] Debug partons being produced in eHIJING
+[ ] Compare to eHIJING-examples
+[ ] Verify computation of zh in Rivet script
 [ ] Wire output to scratch directory
 [ ] Implement Rivet run outside container
-[X] Automate run.meta.json
+[ ] Debug spatial positions in eHIJING
