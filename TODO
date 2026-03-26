@@ -13,3 +13,4 @@ TODO List
 [ ] Wire output to scratch directory
 [ ] Implement Rivet run outside container
 [ ] Debug spatial positions in eHIJING
+[ ] Update README
