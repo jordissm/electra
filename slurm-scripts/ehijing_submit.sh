@@ -147,19 +147,19 @@ apptainer exec \
 EOF
 )
 
-# sbatch --dependency=afterok:${ARRAY_JOB_ID} <<EOF
-# #!/bin/bash
-# #SBATCH -J ${JOB_NAME}:post
-# #SBATCH -A ${ACCOUNT}
-# #SBATCH -p ${PARTITION}
-# #SBATCH -t 00:10:00
-# #SBATCH --cpus-per-task=1
-# #SBATCH --mem=1G
-# #SBATCH -o /dev/null
-# #SBATCH -e /dev/null
+sbatch --dependency=afterok:${ARRAY_JOB_ID} <<EOF
+#!/bin/bash
+#SBATCH -J ${JOB_NAME}:post
+#SBATCH -A ${ACCOUNT}
+#SBATCH -p ${PARTITION}
+#SBATCH -t 00:30:00
+#SBATCH --cpus-per-task=1
+#SBATCH --mem=1G
+#SBATCH -o /dev/null
+#SBATCH -e /dev/null
 
-# set -euo pipefail
+set -euo pipefail
 
-# cat ${RUN_DIR_HOST}/runs/ehijing/events/*.meta.json > ${RUN_DIR_HOST}/runs/ehijing/events/run.meta.json
+cat ${RUN_DIR_HOST}/runs/ehijing/events/**/*.meta.json > ${RUN_DIR_HOST}/runs/ehijing/DISKinematics.meta.json
 
-# EOF
+EOF
