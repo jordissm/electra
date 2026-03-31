@@ -12,5 +12,12 @@ TODO List
 [ ] Verify computation of zh in Rivet script
 [ ] Wire output to scratch directory
 [ ] Implement Rivet run outside container
-[ ] Debug spatial positions in eHIJING
+[X] Debug spatial positions in eHIJING
+[ ] Figure what to do with failing hadronization events
+[ ] Smear spatial positions in eHIJING
+[ ] Test analysis at the eHIJING level
+[ ] Refactor hadronizer.cpp
+[ ] Refactor modified_ff.cpp
 [ ] Update README
+[ ] Implement Fermi momentum
+[ ] Implement Woods-Saxon sampling
