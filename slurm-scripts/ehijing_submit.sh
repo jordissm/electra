@@ -160,6 +160,8 @@ sbatch --dependency=afterok:${ARRAY_JOB_ID} <<EOF
 
 set -euo pipefail
 
-cat ${RUN_DIR_HOST}/runs/ehijing/events/**/*.meta.json > ${RUN_DIR_HOST}/runs/ehijing/DISKinematics.meta.json
+find "${RUN_DIR_HOST}/runs/ehijing/events" -name "*.meta.json" -print0 \
+  | sort -z \
+  | xargs -0 cat > ${RUN_DIR_HOST}/runs/ehijing/DISKinematics.meta.jsonl
 
 EOF
