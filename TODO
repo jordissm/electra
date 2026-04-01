@@ -16,8 +16,9 @@ TODO List
 [ ] Figure what to do with failing hadronization events
 [ ] Smear spatial positions in eHIJING
 [ ] Test analysis at the eHIJING level
-[ ] Refactor hadronizer.cpp
+[X] Refactor hadronizer.cpp
 [ ] Refactor modified_ff.cpp
 [ ] Update README
 [ ] Implement Fermi momentum
 [ ] Implement Woods-Saxon sampling
+[ ] Enforce deterministic seed behavior
