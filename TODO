@@ -13,7 +13,7 @@ TODO List
 [ ] Wire output to scratch directory
 [ ] Implement Rivet run outside container
 [X] Debug spatial positions in eHIJING
-[ ] Figure what to do with failing hadronization events
+[X] Figure what to do with failing hadronization events
 [ ] Smear spatial positions in eHIJING
 [ ] Test analysis at the eHIJING level
 [X] Refactor hadronizer.cpp
