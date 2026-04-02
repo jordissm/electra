@@ -10,7 +10,7 @@ TODO List
 [X] Debug partons being produced in eHIJING
 [ ] Compare to eHIJING-examples
 [ ] Verify computation of zh in Rivet script
-[ ] Wire output to scratch directory
+[X] Wire output to scratch directory
 [ ] Implement Rivet run outside container
 [X] Debug spatial positions in eHIJING
 [X] Figure what to do with failing hadronization events
