@@ -476,6 +476,13 @@ COPY utils/          ${PROJECT_DIR}/share/utils/
 COPY input/          ${PROJECT_DIR}/share/input-defaults/
 COPY slurm-scripts/  ${PROJECT_DIR}/share/slurm-scripts/
 
+# Patch the slurm scripts to replace @PROJECT_ROOT@ with the actual project directory in the container
+RUN <<EOF
+  set -euxo pipefail
+  find "${PROJECT_DIR}/share/slurm-scripts" -type f -name "*.sh" -exec \
+    sed -i "s|@PROJECT_ROOT@|${PROJECT_DIR}|g" {} +
+EOF
+
 RUN <<'EOF'
   set -euxo pipefail
 

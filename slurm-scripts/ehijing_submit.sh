@@ -27,18 +27,18 @@ TIME_LIMIT="${TIME_LIMIT:-00:30:00}"
 CPUS_PER_TASK="${CPUS_PER_TASK:-1}"
 MEMORY="${MEMORY:-2G}"
 
-PROJECT_ROOT="${PROJECT_ROOT:-/projects/illinois/eng/physics/jnorhos/jordi/electra}"
+PROJECT_ROOT="${PROJECT_ROOT:-@PROJECT_ROOT@}"
 RUN_DIR_HOST="${RUN_DIR_HOST:-$PROJECT_ROOT/output}"
 IMG="${IMG:-/scratch/$USER/containers/electra.sif}"
 
 RUN_DIR_CONT="${RUN_DIR_CONT:-/workspace/output}"
 
-Z=36
-A=84
+Z=1 #36
+A=2 #84
 MODE=0
 K=4.0
 TABLE_PATH="${TABLE_PATH:-$RUN_DIR_CONT/runs/ehijing/tables/K}"
-CONFIG_PATH="${CONFIG_PATH:-/projects/illinois/eng/physics/jnorhos/jordi/electra/input/ehijing/hermes.setting}"
+CONFIG_PATH="${CONFIG_PATH:-$PROJECT_ROOT/input/ehijing/hermes.setting}"
 
 NEVENTS="${NEVENTS:-1}"
 CHUNK_SIZE="${CHUNK_SIZE:-1000}"

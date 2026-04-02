@@ -27,13 +27,13 @@ TIME_LIMIT="${TIME_LIMIT:-00:30:00}"
 CPUS_PER_TASK="${CPUS_PER_TASK:-1}"
 MEMORY="${MEMORY:-2G}"
 
-PROJECT_ROOT="${PROJECT_ROOT:-/projects/illinois/eng/physics/jnorhos/jordi/electra}"
+PROJECT_ROOT="${PROJECT_ROOT:-@PROJECT_ROOT@}"
 RUN_DIR_HOST="${RUN_DIR_HOST:-$PROJECT_ROOT/output}"
 IMG="${IMG:-/scratch/$USER/containers/electra.sif}"
 
 RUN_DIR_CONT="${RUN_DIR_CONT:-/workspace/output}"
-CONFIG_FILE="${CONFIG_FILE:-/projects/illinois/eng/physics/jnorhos/jordi/electra/input/smash/config_files/config.yaml}"
-PROFILES="${PROFILES:-/projects/illinois/eng/physics/jnorhos/jordi/electra/input/smash/profiles/profiles.jsonl}"
+CONFIG_FILE="${CONFIG_FILE:-$PROJECT_ROOT/input/smash/config_files/config.yaml}"
+PROFILES="${PROFILES:-$PROJECT_ROOT/input/smash/profiles/profiles.jsonl}"
 
 NEVENTS="${NEVENTS:-1000}"
 CHUNK_SIZE="${CHUNK_SIZE:-1000}"
