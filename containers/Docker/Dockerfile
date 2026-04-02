@@ -389,6 +389,7 @@ ARG PROJECT_DIR
 
 RUN <<EOF
   # Installing ehijing
+  # .
   set -euxo pipefail
   mkdir -p ${PROJECT_DIR}/ehijing_bin
   cd ${PROJECT_DIR}
