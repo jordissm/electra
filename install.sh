@@ -57,6 +57,27 @@ realpath_py() {
   python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$1"
 }
 
+patch_slurm_scripts() {
+  local dir="$1"
+
+  [[ -d "$dir" ]] || return 0
+
+  # Patch eHIJING submit script defaults
+  if [[ -f "$dir/ehijing_submit.sh" ]]; then
+    sed -i \
+      -e 's|^PROJECT_ROOT=.*$|PROJECT_ROOT="${PROJECT_ROOT:-$PREFIX}"|' \
+      -e 's|^CONFIG_PATH=.*$|CONFIG_PATH="${CONFIG_PATH:-$INPUT_DIR/ehijing/hermes.setting}"|' \
+      "$dir/ehijing_submit.sh"
+  fi
+
+  # Patch SMASH submit script too, if needed later
+  if [[ -f "$dir/smash_submit.sh" ]]; then
+    sed -i \
+      -e 's|^PROJECT_ROOT=.*$|PROJECT_ROOT="${PROJECT_ROOT:-$PREFIX}"|' \
+      "$dir/smash_submit.sh"
+  fi
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -p|--prefix) PREFIX="$(realpath_py "$2")"; shift 2;;
@@ -141,6 +162,7 @@ if [[ "$ON_CLUSTER" == "1" ]]; then
       echo "Copying SLURM scripts from SIF into: $SLURM_SCRIPTS_DIR"
       apptainer exec --bind "$SLURM_SCRIPTS_DIR:/workspace/input/" "$SIF_PATH" \
         /bin/bash -c 'if [[ -d /opt/electra/share/slurm-scripts ]]; then cp -a /opt/electra/share/slurm-scripts/. /workspace/input/; fi'
+      patch_slurm_scripts "$SLURM_SCRIPTS_DIR"
     elif command -v docker >/dev/null 2>&1; then
       echo "Copying SLURM scripts from Docker image into: $SLURM_SCRIPTS_DIR"
       docker run --rm \

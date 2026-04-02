@@ -470,18 +470,11 @@ EOF
 # PATCH: install the electra python package into the image (late for caching)
 # Assumes build context is the repo root containing pyproject.toml + python/electra/*
 COPY pyproject.toml README.md ${PROJECT_DIR}/electra_src/
-COPY python/ ${PROJECT_DIR}/electra_src/python/
-COPY rivet-analyses/ ${PROJECT_DIR}/share/rivet-analyses/
-COPY utils/          ${PROJECT_DIR}/share/utils/
-COPY input/          ${PROJECT_DIR}/share/input-defaults/
-COPY slurm-scripts/  ${PROJECT_DIR}/share/slurm-scripts/
-
-# Patch the slurm scripts to replace @PROJECT_ROOT@ with the actual project directory in the container
-RUN <<EOF
-  set -euxo pipefail
-  find "${PROJECT_DIR}/share/slurm-scripts" -type f -name "*.sh" -exec \
-    sed -i "s|@PROJECT_ROOT@|${PROJECT_DIR}|g" {} +
-EOF
+COPY python/                  ${PROJECT_DIR}/electra_src/python/
+COPY rivet-analyses/          ${PROJECT_DIR}/share/rivet-analyses/
+COPY utils/                   ${PROJECT_DIR}/share/utils/
+COPY input/                   ${PROJECT_DIR}/share/input-defaults/
+COPY slurm-scripts/           ${PROJECT_DIR}/share/slurm-scripts/
 
 RUN <<'EOF'
   set -euxo pipefail
