@@ -8,7 +8,10 @@ General:
     Randomseed:     -1
     Cross_Section_Scaling_Factor:
         Type: File
-        Path: /workspace/input/smash/xsec_scaling_factor_profiles/p_000000.dat
+
+Modi:
+    List:
+        Optional_Quantities: ["ID", "charge", "begin_form_time", "xsecfac"]
 
 Output:
     Output_Interval: 50.0
