@@ -22,3 +22,10 @@ TODO List
 [ ] Implement Fermi momentum
 [ ] Implement Woods-Saxon sampling
 [ ] Enforce deterministic seed behavior
+[X] Implement begin_form_time in SMASH
+[ ] Read tau_form from profile in SMASH
+[ ] Move eHIJING constants to constants.hpp
+[X] Set up new config.yaml for SMASH
+[ ] Implement anti-freestreaming in eHIJING to t = 0 fm
+[X] Add a begin_form_time column to the OSCAR eHIJING output
+[X] Add a xsecfac column to the OSCAR eHIJING output
