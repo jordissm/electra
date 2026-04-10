@@ -31,6 +31,7 @@ rivet_out_*/**
 # ========================
 # Build files
 electra-shell
+build-test/
 
 # ========================
 modified_files/
