@@ -355,6 +355,7 @@ ARG HEPMC_INSTALL
 RUN <<EOF
   # Installing smash
   # .
+  # .
   set -euxo pipefail
   mkdir -p ${PROJECT_DIR}/smash_bin
   cd ${PROJECT_DIR}
