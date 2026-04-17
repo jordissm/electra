@@ -74,6 +74,10 @@ If you use ELECTRA in your research, please cite:
 
 ELECTRA is released under the UIUC License. See [LICENSE](LICENSE) for details.
 
+## Attribution
+
+This project is the collaboration of J. Salinas San Martin, W. Zhao, W. Ke, J. Noronha-Hostler, and X.-N. Yang.
+
 ## Acknowledgements
 
 This work has been supported by the Saturated Glue (SURGE) Topical Theory Collaboration.
