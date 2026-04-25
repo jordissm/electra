@@ -8,24 +8,29 @@ TODO List
 [X] Automate run.meta.json
 [X] Refactor eHIJING
 [X] Debug partons being produced in eHIJING
-[ ] Compare to eHIJING-examples
-[ ] Verify computation of zh in Rivet script
 [X] Wire output to scratch directory
-[ ] Implement Rivet run outside container
 [X] Debug spatial positions in eHIJING
 [X] Figure what to do with failing hadronization events
-[ ] Smear spatial positions in eHIJING
-[ ] Test analysis at the eHIJING level
 [X] Refactor hadronizer.cpp
-[ ] Refactor modified_ff.cpp
 [X] Update README
+[X] Implement begin_form_time in SMASH
+[X] Set up new config.yaml for SMASH
+[X] Add a begin_form_time column to the OSCAR eHIJING output
+[X] Add a xsecfac column to the OSCAR eHIJING output
+[X] Verify computation of zh in Rivet script
+[ ] Implement anti-freestreaming in eHIJING to t = 0 fm
+[ ] Compare to eHIJING-examples
+[ ] Read tau_form from profile in SMASH
+[ ] Move eHIJING constants to constants.hpp
+[ ] Implement Rivet run outside container
 [ ] Implement Fermi momentum
 [ ] Implement Woods-Saxon sampling
 [ ] Enforce deterministic seed behavior
-[X] Implement begin_form_time in SMASH
-[ ] Read tau_form from profile in SMASH
-[ ] Move eHIJING constants to constants.hpp
-[X] Set up new config.yaml for SMASH
-[ ] Implement anti-freestreaming in eHIJING to t = 0 fm
-[X] Add a begin_form_time column to the OSCAR eHIJING output
-[X] Add a xsecfac column to the OSCAR eHIJING output
+[ ] Refactor modified_ff.cpp
+[ ] Smear spatial positions in eHIJING
+[ ] Test analysis at the eHIJING level
+[ ] Feed particle list to eHIJING -> Pythia from particles.txt file
+[ ] Move eHIJING settings to input command files
+[ ] Assign unique run ID at runtime
+[ ] Use experimental data from downloaded files
+[ ] Enforce hadron forward cut for HERMES
