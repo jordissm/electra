@@ -27,24 +27,75 @@ TIME_LIMIT="${TIME_LIMIT:-00:30:00}"
 CPUS_PER_TASK="${CPUS_PER_TASK:-1}"
 MEMORY="${MEMORY:-2G}"
 
+# Find project root
 PROJECT_ROOT="${PROJECT_ROOT:-@PROJECT_ROOT@}"
-RUN_DIR_HOST="${RUN_DIR_HOST:-$PROJECT_ROOT/output}"
+
+# Container image path
 IMG="${IMG:-/scratch/$USER/containers/electra.sif}"
 
-RUN_DIR_CONT="${RUN_DIR_CONT:-/workspace/output}"
+# Output directory on host and container
+OUTPUT_HOST="${OUTPUT_HOST:-$PROJECT_ROOT/output}"
+OUTPUT_CONT="${OUTPUT_CONT:-/workspace/output}"
 
+# Physical parameters for eHIJING
 Z=1 #36
 A=2 #84
-MODE=0
+MED_MODIF_MODE=0
 K=4.0
-TABLE_PATH="${TABLE_PATH:-$RUN_DIR_CONT/runs/ehijing/tables/K}"
 CONFIG_PATH="${CONFIG_PATH:-$PROJECT_ROOT/input/ehijing/hermes.setting}"
 
 NEVENTS="${NEVENTS:-1}"
 CHUNK_SIZE="${CHUNK_SIZE:-1000}"
+OVERWRITE_RUN="${OVERWRITE_RUN:-false}"
 
+RUNS_DIR_HOST="$OUTPUT_HOST/runs"
+RUNS_DIR_CONT="$OUTPUT_CONT/runs"
 
-LOG_DIR="$RUN_DIR_HOST/runs/ehijing/logs"
+is_truthy() {
+    case "${1,,}" in
+        1|true|yes|y|on) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+reserve_run_id() {
+    local runs_dir="$1"
+    local run_id=0
+
+    mkdir -p "$runs_dir"
+    while ! mkdir "$runs_dir/$run_id" 2>/dev/null; do
+        run_id=$((run_id + 1))
+    done
+
+    printf '%s\n' "$run_id"
+}
+
+if [[ -n "${RUN_ID:-}" ]]; then
+    if ! [[ "$RUN_ID" =~ ^[0-9]+$ ]]; then
+        echo "Error: RUN_ID must be a non-negative integer, got '$RUN_ID'" >&2
+        exit 1
+    fi
+
+    if [[ -e "$RUNS_DIR_HOST/$RUN_ID" ]]; then
+        if ! is_truthy "$OVERWRITE_RUN"; then
+            echo "Error: run '$RUN_ID' already exists at '$RUNS_DIR_HOST/$RUN_ID'." >&2
+            echo "       Re-run with OVERWRITE_RUN=true to reuse it explicitly." >&2
+            exit 1
+        fi
+    else
+        mkdir -p "$RUNS_DIR_HOST/$RUN_ID"
+    fi
+else
+    RUN_ID="$(reserve_run_id "$RUNS_DIR_HOST")"
+fi
+
+RUN_ROOT_HOST="$RUNS_DIR_HOST/$RUN_ID"
+RUN_ROOT_CONT="$RUNS_DIR_CONT/$RUN_ID"
+EHIJING_RUN_DIR_HOST="$RUN_ROOT_HOST/ehijing"
+EHIJING_RUN_DIR_CONT="$RUN_ROOT_CONT/ehijing"
+
+TABLE_PATH="${TABLE_PATH:-$EHIJING_RUN_DIR_CONT/tables/K}"
+LOG_DIR="$EHIJING_RUN_DIR_HOST/logs"
 
 # -----------------------------
 # Validate and convert NEVENTS
@@ -70,6 +121,8 @@ ARRAY_RANGE="0-$((NUM_CHUNKS - 1))"
 mkdir -p "$LOG_DIR"
 
 echo "Submitting eHIJING run:"
+echo "  run id       : $RUN_ID"
+echo "  run dir      : $EHIJING_RUN_DIR_CONT"
 echo "  total events : $NEVENTS"
 echo "  chunk size   : $CHUNK_SIZE"
 echo "  num chunks   : $NUM_CHUNKS"
@@ -97,12 +150,13 @@ PROJECT_ROOT="${PROJECT_ROOT}"
 RUN_DIR_HOST="${RUN_DIR_HOST}"
 IMG="${IMG}"
 RUN_DIR_CONT="${RUN_DIR_CONT}"
+RUN_ROOT_CONT="${RUN_ROOT_CONT}"
 TABLE_PATH="${TABLE_PATH}"
 CONFIG_PATH="${CONFIG_PATH}"
 
 Z="${Z}"
 A="${A}"
-MODE="${MODE}"
+MED_MODIF_MODE="${MED_MODIF_MODE}"
 K="${K}"
 NEVENTS="${NEVENTS}"
 CHUNK_SIZE="${CHUNK_SIZE}"
@@ -127,7 +181,7 @@ fi
 
 apptainer exec \
     --cleanenv \
-    --bind "\${RUN_DIR_HOST}:\${RUN_DIR_CONT}" \
+    --bind "\${OUTPUT_HOST}:\${OUTPUT_CONT}" \
     --pwd /workspace \
     "\${IMG}" \
     /usr/local/bin/entrypoint.sh \
@@ -136,11 +190,11 @@ apptainer exec \
         electra ehijing run \
             --Z ${Z} \
             --A ${A} \
-            --mode ${MODE} \
-            --run-dir \${RUN_DIR_CONT}/runs \
-            --table-path \${TASK_TABLE_PATH} \
-            --config-file \${CONFIG_PATH} \
-            --nevents \${TASK_NEVENTS} \
+            --medium-modification-mode \${MED_MODIF_MODE} \
+            --run-path \${RUN_ROOT_CONT} \
+            --tabulation-path \${TASK_TABLE_PATH} \
+            --hard-process-config \${CONFIG_PATH} \
+            --number-of-events \${TASK_NEVENTS} \
             --first-event-id \${FIRST_EVENT_ID} \
             --chunk-size \${CHUNK_SIZE} \
     "
@@ -160,8 +214,8 @@ sbatch --dependency=afterok:${ARRAY_JOB_ID} <<EOF
 
 set -euo pipefail
 
-find "${RUN_DIR_HOST}/runs/ehijing/events" -name "*.meta.json" -print0 \
+find "${EHIJING_RUN_DIR_HOST}/events" -name "*.meta.json" -print0 \
   | sort -z \
-  | xargs -0 cat > ${RUN_DIR_HOST}/runs/ehijing/DISKinematics.meta.jsonl
+  | xargs -0 cat > "${EHIJING_RUN_DIR_HOST}/DISKinematics.meta.jsonl"
 
 EOF
