@@ -1,42 +1,32 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# run_rivet_dndptdz_per_profile.sh
+# rivet_analysis_dndptdz_submit.sh
 #
-# Run the Rivet analysis EHIJING_SMASH_DNDPtDZ once per SMASH "profile_p_XXXXXX",
+# Run the Rivet analysis EHIJING_SMASH_DNDPTDZ once per SMASH "profile_p_XXXXXX",
 # WITHOUT merging across profiles, and write one YODA per profile.
 #
 # Tailored for Rivet v3.1.7 (no --analysis-opts), so we pass configuration via env vars:
-#   RIVET_METAFILE, RIVET_FRAME, RIVET_PT_MIN, RIVET_PT_MAX, RIVET_PT_NBINS
+#   RIVET_METAFILE, RIVET_PT_MIN, RIVET_PT_MAX, RIVET_PT_NBINS
 #
 # Usage:
 #   ./run_rivet_dndptdz_per_profile.sh \
-#     /path/to/run/smash \
-#     /path/to/run.meta.json \
-#     BREIT \
-#     /path/to/RivetEHIJING_SMASH_2026_DNDPtDZ.so \
+#     /path/to/output/runs/smash/events/ \
+#     /path/to/output/runs/ehijing/DISKinematics.meta.jsonl \
+#     /path/to/Rivet_EHIJING_SMASH_2026_DNDPTDZ.so \
 #     [PT_MIN] [PT_MAX] [PT_NBINS]
 #
 # Examples:
-#   # Default pT axis (0..2 GeV, 40 bins) as in the C++ analysis defaults:
-#   ./run_rivet_dndptdz_per_profile.sh run/smash run/ehijing/events/run.meta.json BREIT rivet/RivetEHIJING_SMASH_2026_DNDPtDZ.so
-#
-#   # Custom pT axis: 0..5 GeV, 100 bins
-#   ./run_rivet_dndptdz_per_profile.sh run/smash run/ehijing/events/run.meta.json BREIT rivet/RivetEHIJING_SMASH_2026_DNDPtDZ.so 0.0 5.0 100
-#
-# Notes:
-# - If your HepMC files have inconsistent "beam" particles between files, add --ignore-beams
-#   (this ignores beam *consistency checks*, it does NOT drop particles from the event record).
+#   bash run_rivet_dndptdz_per_profile.sh output/runs/smash/events/ output/runs/ehijing/events/DISKinematics.meta.jsonl rivet/Rivet_EHIJING_SMASH_2026_DNDPTDZ.so 0.0 1.1 20
 
-SMASH_DIR="${1:?Need SMASH dir (e.g. run/smash)}"
-META_JSON="${2:?Need meta json path (e.g. run/ehijing/events/run.meta.json)}"
-FRAME="${3:-BREIT}"
-RIVET_SO="${4:?Need Rivet analysis .so path}"
-PT_MIN="${5:-}"
-PT_MAX="${6:-}"
-PT_NBINS="${7:-}"
+SMASH_DIR="${1:?Need SMASH dir (e.g. output/runs/smash/events/)}"
+META_JSON="${2:?Need meta json path (e.g. output/runs/ehijing/DISKinematics.meta.jsonl)}"
+RIVET_SO="${3:?Need Rivet analysis .so path}"
+PT_MIN="${4:-0.0}"
+PT_MAX="${5:-1.1}"
+PT_NBINS="${6:-11}"
 
-ANA="EHIJING_SMASH_DNDPtDZ"
+ANA="EHIJING_SMASH_DNDPTDZ"
 
 # Resolve rivet binary (prefer PATH, else fall back to common install prefix)
 RIVET_BIN="$(command -v rivet || true)"
@@ -61,15 +51,6 @@ if [[ ! -f "$RIVET_SO" ]]; then
   echo "ERROR: Rivet .so not found: $RIVET_SO" >&2
   exit 1
 fi
-
-# Basic frame validation
-case "$FRAME" in
-  LAB|TRF|BREIT) ;;
-  *)
-    echo "ERROR: FRAME must be LAB, TRF, or BREIT (got '$FRAME')" >&2
-    exit 1
-    ;;
-esac
 
 # Numeric validators
 is_number() {
@@ -107,13 +88,7 @@ if [[ -n "$PT_MIN" || -n "$PT_MAX" || -n "$PT_NBINS" ]]; then
 fi
 
 # Output directory
-OUTDIR="/workspace/output/runs/rivet/rivet_out_${ANA}_${FRAME}"
-if [[ $USE_PT_AXIS -eq 1 ]]; then
-  PT_TAG="pt_${PT_MIN}_to_${PT_MAX}_nb${PT_NBINS}"
-  PT_TAG="${PT_TAG//./p}"
-  PT_TAG="${PT_TAG//-/m}"
-  OUTDIR="${OUTDIR}_${PT_TAG}"
-fi
+OUTDIR="/workspace/output/runs/rivet/rivet_out_${ANA}"
 mkdir -p "$OUTDIR"
 
 # Find all HepMC files
@@ -130,7 +105,6 @@ PROFILES=$(printf "%s\n" "${FILES[@]}" \
 
 echo "Rivet bin: ${RIVET_BIN}"
 echo "Analysis:  ${ANA}"
-echo "Frame:     ${FRAME}"
 echo "Meta file: ${META_JSON}"
 echo "Plugin:    ${RIVET_SO}"
 if [[ $USE_PT_AXIS -eq 1 ]]; then
@@ -151,7 +125,7 @@ while IFS= read -r PROFILE_NAME; do
 
   YODA_OUT="${OUTDIR}/${PROFILE_NAME}.yoda"
 
-  # Collect the matching profile file across all evt_XXXXXX (same profile id)
+  # Collect the matching profile file across all evt_XXXXXXXX (same profile id)
   mapfile -t PF_FILES < <(find "$SMASH_DIR" -type f -path "*/${PROFILE_NAME}/SMASH_HepMC_particles.asciiv3" | sort)
 
   if [[ ${#PF_FILES[@]} -eq 0 ]]; then
@@ -167,10 +141,6 @@ while IFS= read -r PROFILE_NAME; do
 
   # Build env for this run
   export RIVET_METAFILE="$META_JSON"
-  export RIVET_FRAME="$FRAME"
-  export RIVET_PHOTONGOING=1
-  export RIVET_VETO_SPECTATORS=1
-  export RIVET_SPECTATOR_PMAX=0.001
 
   if [[ $USE_PT_AXIS -eq 1 ]]; then
     export RIVET_PT_MIN="$PT_MIN"
@@ -182,24 +152,19 @@ while IFS= read -r PROFILE_NAME; do
     unset RIVET_PT_NBINS || true
   fi
 
-  # Print the exact command (nice for logs)
+  # Print the exact command
   echo "RIVET_METAFILE=\"${RIVET_METAFILE}\" \\"
-  echo "RIVET_FRAME=\"${RIVET_FRAME}\" \\"
-  echo "RIVET_PHOTONGOING=\"${RIVET_PHOTONGOING}\" \\"
-  echo "RIVET_VETO_SPECTATORS=\"${RIVET_VETO_SPECTATORS}\" \\"
-  echo "RIVET_SPECTATOR_PMAX=\"${RIVET_SPECTATOR_PMAX}\" \\"
   if [[ $USE_PT_AXIS -eq 1 ]]; then
     echo "RIVET_PT_MIN=\"${RIVET_PT_MIN}\" \\"
     echo "RIVET_PT_MAX=\"${RIVET_PT_MAX}\" \\"
     echo "RIVET_PT_NBINS=\"${RIVET_PT_NBINS}\" \\"
   fi
-  echo "\"${RIVET_BIN}\" --ignore-beams -a \"${ANA}\" --pwd --analysis-path \"${ANA_PATH}\" -o \"${YODA_OUT}\" \\"
+  echo "\"${RIVET_BIN}\" --ignore-beams -a \"${ANA}\" --analysis-path \"${ANA_PATH}\" -o \"${YODA_OUT}\" \\"
   echo "  <${#PF_FILES[@]} input files>"
   echo
 
   "${RIVET_BIN}" \
     -a "${ANA}" \
-    --pwd \
     --analysis-path "${ANA_PATH}" \
     --ignore-beams \
     -o "${YODA_OUT}" \
