@@ -96,7 +96,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 mkdir -p "$PREFIX"
-mkdir -p "$OUTPUT_DIR"/runs
+mkdir -p "$OUTPUT_DIR"
 mkdir -p "$INPUT_DIR"
 
 ON_CLUSTER="0"
