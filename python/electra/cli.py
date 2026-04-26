@@ -14,8 +14,8 @@ import os
 import argparse
 import hashlib
 import json
-import shutil
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -122,12 +122,23 @@ def run_layout(run_dir: Path) -> Dict[str, Path]:
     return {
         "run": run_dir,
         "manifest": run_dir / "manifest.jsonl",
-        "ehijing_events": run_dir / "ehijing" / "events",
-        "ehijing_logs": run_dir / "ehijing" / "logs",
+        "ehijing_events": run_dir / "events",
+        "ehijing_logs": run_dir / "logs",
         "smash": run_dir / "smash",
         "meta": run_dir / "metadata",
         "profiles_root": run_dir / "profiles",
         "profiles_index": (run_dir / "profiles" / "profiles.jsonl"),
+    }
+
+
+def ehijing_run_layout(run_dir: Path) -> Dict[str, Path]:
+    return {
+        "run": run_dir,
+        "manifest": run_dir / "manifest.jsonl",
+        "events": run_dir / "events",
+        "logs": run_dir / "logs",
+        "tables": run_dir / "tables",
+        "diskinematics": run_dir / "DISKinematics.meta.jsonl",
     }
 
 
@@ -150,11 +161,11 @@ def ehijing_task(
     table_path: Path,
     config_file: Path,
 ) -> None:
-    layout = run_layout(run_dir)
-    mkdir(layout["ehijing_events"])
-    mkdir(layout["ehijing_logs"])
+    layout = ehijing_run_layout(run_dir)
+    mkdir(layout["events"])
+    mkdir(layout["logs"])
 
-    events_dir = layout["ehijing_events"]
+    events_dir = layout["events"]
 
     if nevents <= 0:
         return
@@ -177,7 +188,7 @@ def ehijing_task(
     # NOTE: table_path is a directory; config_file is the .setting file.
     cmd = [
         "ehijing",
-        "--nevents",
+        "--number-of-events",
         str(nevents),
         "--first-event-id",
         str(first_event_id),
@@ -187,15 +198,15 @@ def ehijing_task(
         str(Z),
         "--A",
         str(A),
-        "--mode",
+        "--medium-modification-mode",
         str(mode),
         "--K",
         str(K),
-        "--table-dir",
+        "--tabulation-path",
         str(Path(table_path)),
-        "--run-dir",
+        "--run-path",
         str(events_dir),
-        "--config-file",
+        "--hard-process-config-file",
         str(Path(config_file)),
         "--seed",
         str(seed),  # enable if your ehijing supports it
@@ -207,15 +218,15 @@ def ehijing_task(
 
     record = {
         "first_event_id": first_event_id,
-        "nevents": nevents,
+        "number_of_events": nevents,
         "chunk_size": chunk_size,
         "ehijing_seed": seed,  # recorded (not yet used by ehijing)
         "Z": Z,
         "A": A,
-        "mode": mode,
+        "medium_modification_mode": mode,
         "K": K,
-        "table_path": str(Path(table_path)),
-        "config_file": str(Path(config_file)),
+        "tabulation_path": str(Path(table_path)),
+        "hard_process_config_file": str(Path(config_file)),
         "events_dir": str(events_dir),
     }
 
@@ -310,25 +321,43 @@ def smash_physical_event_task(
 
 
 def cmd_ehijing(args: argparse.Namespace) -> None:
-    run_dir = Path(args.run_dir).resolve()
+    run_path = getattr(args, "run_path", None) or getattr(args, "run_dir", None)
+    table_arg = getattr(args, "tabulation_path", None) or getattr(args, "table_path", None)
+    config_arg = getattr(args, "hard_process_config_file", None) or getattr(args, "config_file", None)
+    nevents_arg = getattr(args, "number_of_events", None) or getattr(args, "nevents", None)
+    mode_arg = getattr(args, "medium_modification_mode", None)
+    if mode_arg is None:
+        mode_arg = getattr(args, "mode", None)
+
+    if config_arg is None:
+        raise ValueError("Missing eHIJING config file")
+    if nevents_arg is None:
+        raise ValueError("Missing eHIJING number of events")
+    if mode_arg is None:
+        raise ValueError("Missing eHIJING medium modification mode")
+    if run_path is None:
+        raise ValueError("Missing eHIJING run path")
+
+    config_file = Path(config_arg).resolve()
+    if not config_file.exists():
+        raise FileNotFoundError(f"Missing ehijing config file: {config_file}")
+
+    run_dir = Path(run_path).resolve()
     mkdir(run_dir)
 
     base_seed = int(args.seed)
 
-    table_path = Path(args.table_path).resolve()
-    config_file = Path(args.config_file).resolve()
-    if not config_file.exists():
-        raise FileNotFoundError(f"Missing ehijing config file: {config_file}")
+    table_path = Path(table_arg).resolve() if table_arg is not None else run_dir / "tables" / "K"
 
     ehijing_task(
         run_dir,
         int(args.first_event_id),
-        int(args.nevents),
+        int(nevents_arg),
         int(args.chunk_size) if hasattr(args, "chunk_size") else None,
         base_seed,
         Z=int(args.Z),
         A=int(args.A),
-        mode=int(args.mode),
+        mode=int(mode_arg),
         K=float(args.K),
         table_path=table_path,
         config_file=config_file,
@@ -462,10 +491,10 @@ def build_parser() -> argparse.ArgumentParser:
     per = spe.add_parser("run")
     per.add_argument("--Z", type=int, default=1)
     per.add_argument("--A", type=int, default=2)
-    per.add_argument("--mode", type=int, default=0)
+    per.add_argument("--medium-modification-mode", type=int, default=0)
     per.add_argument("--K", type=float, default=4.0)
-    per.add_argument("--run-dir", required=True)
-    per.add_argument("--nevents", type=int, required=True)
+    per.add_argument("--run-path", required=True)
+    per.add_argument("--number-of-events", type=int, required=True)
     per.add_argument("--seed", type=int, default=12345)
     per.add_argument(
         "--first-event-id",
@@ -480,12 +509,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional chunk size for eHIJING runs (default: 1, i.e. no chunking)",
     )
     per.add_argument(
-        "--table-path",
-        required=True,
-        help="Directory with eHIJING tables, e.g. output/runs/ehijing/tables/K4p0",
+        "--tabulation-path",
+        default=None,
+        help="Directory with eHIJING tables, e.g. output/ehijing/runs/0/tables/K",
     )
     per.add_argument(
-        "--config-file",
+        "--hard-process-config-file",
         required=True,
         help="eHIJING config/setting file, e.g. input/ehijing/experiments/hermes.setting",
     )
@@ -569,7 +598,11 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: Optional[List[str]] = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    args.func(args)
+    try:
+        args.func(args)
+    except Exception as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
     return 0
 
 

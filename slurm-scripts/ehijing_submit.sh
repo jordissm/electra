@@ -48,8 +48,8 @@ NEVENTS="${NEVENTS:-1}"
 CHUNK_SIZE="${CHUNK_SIZE:-1000}"
 OVERWRITE_RUN="${OVERWRITE_RUN:-false}"
 
-RUNS_DIR_HOST="$OUTPUT_HOST/runs"
-RUNS_DIR_CONT="$OUTPUT_CONT/runs"
+RUNS_DIR_HOST="$OUTPUT_HOST/ehijing/runs"
+RUNS_DIR_CONT="$OUTPUT_CONT/ehijing/runs"
 
 is_truthy() {
     case "${1,,}" in
@@ -78,7 +78,7 @@ if [[ -n "${RUN_ID:-}" ]]; then
 
     if [[ -e "$RUNS_DIR_HOST/$RUN_ID" ]]; then
         if ! is_truthy "$OVERWRITE_RUN"; then
-            echo "Error: run '$RUN_ID' already exists at '$RUNS_DIR_HOST/$RUN_ID'." >&2
+            echo "Error: eHIJING run '$RUN_ID' already exists at '$RUNS_DIR_HOST/$RUN_ID'." >&2
             echo "       Re-run with OVERWRITE_RUN=true to reuse it explicitly." >&2
             exit 1
         fi
@@ -89,10 +89,8 @@ else
     RUN_ID="$(reserve_run_id "$RUNS_DIR_HOST")"
 fi
 
-RUN_ROOT_HOST="$RUNS_DIR_HOST/$RUN_ID"
-RUN_ROOT_CONT="$RUNS_DIR_CONT/$RUN_ID"
-EHIJING_RUN_DIR_HOST="$RUN_ROOT_HOST/ehijing"
-EHIJING_RUN_DIR_CONT="$RUN_ROOT_CONT/ehijing"
+EHIJING_RUN_DIR_HOST="$RUNS_DIR_HOST/$RUN_ID"
+EHIJING_RUN_DIR_CONT="$RUNS_DIR_CONT/$RUN_ID"
 
 TABLE_PATH="${TABLE_PATH:-$EHIJING_RUN_DIR_CONT/tables/K}"
 LOG_DIR="$EHIJING_RUN_DIR_HOST/logs"
@@ -147,10 +145,10 @@ sbatch --parsable <<EOF
 set -euo pipefail
 
 PROJECT_ROOT="${PROJECT_ROOT}"
-RUN_DIR_HOST="${RUN_DIR_HOST}"
+OUTPUT_HOST="${OUTPUT_HOST}"
 IMG="${IMG}"
-RUN_DIR_CONT="${RUN_DIR_CONT}"
-RUN_ROOT_CONT="${RUN_ROOT_CONT}"
+OUTPUT_CONT="${OUTPUT_CONT}"
+EHIJING_RUN_DIR_CONT="${EHIJING_RUN_DIR_CONT}"
 TABLE_PATH="${TABLE_PATH}"
 CONFIG_PATH="${CONFIG_PATH}"
 
@@ -191,9 +189,9 @@ apptainer exec \
             --Z ${Z} \
             --A ${A} \
             --medium-modification-mode \${MED_MODIF_MODE} \
-            --run-path \${RUN_ROOT_CONT} \
+            --run-path \${EHIJING_RUN_DIR_CONT} \
             --tabulation-path \${TASK_TABLE_PATH} \
-            --hard-process-config \${CONFIG_PATH} \
+            --hard-process-config-file \${CONFIG_PATH} \
             --number-of-events \${TASK_NEVENTS} \
             --first-event-id \${FIRST_EVENT_ID} \
             --chunk-size \${CHUNK_SIZE} \
