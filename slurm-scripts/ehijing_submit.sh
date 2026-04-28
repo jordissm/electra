@@ -191,7 +191,7 @@ apptainer exec \
             --medium-modification-mode \${MED_MODIF_MODE} \
             --run-path \${EHIJING_RUN_DIR_CONT} \
             --tabulation-path \${TASK_TABLE_PATH} \
-            --hard-process-config-file \${CONFIG_PATH} \
+            --hard-process-config \${CONFIG_PATH} \
             --number-of-events \${TASK_NEVENTS} \
             --first-event-id \${FIRST_EVENT_ID} \
             --chunk-size \${CHUNK_SIZE} \
