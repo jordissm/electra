@@ -321,19 +321,11 @@ def smash_physical_event_task(
 
 
 def cmd_ehijing(args: argparse.Namespace) -> None:
-    run_path = getattr(args, "run_path", None) or getattr(args, "run_dir", None)
-    table_arg = getattr(args, "tabulation_path", None) or getattr(
-        args, "table_path", None
-    )
-    config_arg = getattr(args, "hard_process_config_file", None) or getattr(
-        args, "config_file", None
-    )
-    nevents_arg = getattr(args, "number_of_events", None) or getattr(
-        args, "number-of-events", None
-    )
+    run_path = getattr(args, "run_path", None)
+    table_arg = getattr(args, "tabulation_path", None)
+    config_arg = getattr(args, "hard_process_config", None)
+    nevents_arg = getattr(args, "number_of_events", None)
     mode_arg = getattr(args, "medium_modification_mode", None)
-    if mode_arg is None:
-        mode_arg = getattr(args, "mode", None)
 
     if config_arg is None:
         raise ValueError("Missing eHIJING config file")
