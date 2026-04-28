@@ -397,6 +397,7 @@ RUN <<EOF
   # .
   # .
   # .
+  # .
   set -euxo pipefail
   mkdir -p ${PROJECT_DIR}/ehijing_bin
   cd ${PROJECT_DIR}
