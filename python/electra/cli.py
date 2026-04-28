@@ -206,7 +206,7 @@ def ehijing_task(
         str(Path(table_path)),
         "--run-path",
         str(events_dir),
-        "--hard-process-config-file",
+        "--hard-process-config",
         str(Path(config_file)),
         "--seed",
         str(seed),  # enable if your ehijing supports it
@@ -226,7 +226,7 @@ def ehijing_task(
         "medium_modification_mode": mode,
         "K": K,
         "tabulation_path": str(Path(table_path)),
-        "hard_process_config_file": str(Path(config_file)),
+        "hard_process_config": str(Path(config_file)),
         "events_dir": str(events_dir),
     }
 
@@ -479,11 +479,6 @@ def cmd_smash(args: argparse.Namespace) -> None:
             )
 
 
-def cmd_pipeline(args: argparse.Namespace) -> None:
-    cmd_ehijing(args)
-    cmd_smash(args)
-
-
 # -----------------------------------------------------------------------------
 # CLI wiring
 # -----------------------------------------------------------------------------
@@ -522,7 +517,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Directory with eHIJING tables, e.g. output/ehijing/runs/0/tables/K",
     )
     per.add_argument(
-        "--hard-process-config-file",
+        "--hard-process-config",
         required=True,
         help="eHIJING config/setting file, e.g. input/ehijing/experiments/hermes.setting",
     )
@@ -564,41 +559,6 @@ def build_parser() -> argparse.ArgumentParser:
         help="Global first event index to process from the sorted eHIJING event list",
     )
     psr.set_defaults(func=cmd_smash)
-
-    # pipeline
-    pp = sp.add_parser("pipeline")
-    spp = pp.add_subparsers(dest="sub", required=True)
-    ppr = spp.add_parser("run")
-    ppr.add_argument("--Z", type=int, default=1)
-    ppr.add_argument("--A", type=int, default=2)
-    ppr.add_argument("--mode", type=int, default=0)
-    ppr.add_argument("--K", type=float, default=4.0)
-    ppr.add_argument("--table-path", required=True)
-    ppr.add_argument("--config-file", required=True)
-    ppr.add_argument("--run-dir", required=True)
-    ppr.add_argument("--nevents", type=int, required=True)
-    ppr.add_argument(
-        "--first-event-id",
-        type=int,
-        default=0,
-        help="Global first event ID for this chunk (default: 0)",
-    )
-    ppr.add_argument(
-        "--chunk-size",
-        type=int,
-        default=None,
-        help="Optional chunk size for eHIJING runs (default: 1, i.e. no chunking)",
-    )
-    ppr.add_argument("--nreplicas", type=int, required=True)
-    ppr.add_argument("--seed", type=int, default=12345)
-    ppr.add_argument("--profiles-index", required=True, help="Path to profiles.jsonl")
-    ppr.add_argument(
-        "--nprofiles",
-        type=int,
-        default=None,
-        help="Optional: limit number of profiles to run per event",
-    )
-    ppr.set_defaults(func=cmd_pipeline)
 
     return p
 
