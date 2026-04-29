@@ -41,7 +41,8 @@ NREPLICAS="${NREPLICAS:-1000}"
 NPROFILES="${NPROFILES:-1}"
 TASK_MODE="${TASK_MODE:-one}"
 
-LOG_DIR="$RUN_DIR_HOST/smash/logs"
+RUN_DIR="${RUN_DIR:-$RUN_DIR_HOST/runs/0}"
+LOG_DIR="${LOG_DIR:-$RUN_DIR/smash/logs}"
 
 # -----------------------------
 # Validate and convert NEVENTS
@@ -83,6 +84,7 @@ PROJECT_ROOT="${PROJECT_ROOT}"
 RUN_DIR_HOST="${RUN_DIR_HOST}"
 IMG="${IMG}"
 RUN_DIR_CONT="${RUN_DIR_CONT}"
+RUN_DIR="${RUN_DIR}"
 CONFIG_FILE="${CONFIG_FILE}"
 PROFILES="${PROFILES}"
 LOG_DIR="${LOG_DIR}"
@@ -128,7 +130,7 @@ for TASK_ID in \$(seq 0 \$((NTASKS - 1))); do
         /bin/bash --noprofile --norc -lc "
             set -euo pipefail
             electra smash run \
-                --run-dir \${RUN_DIR_CONT} \
+                --run-dir \${RUN_DIR} \
                 --config-file \${CONFIG_FILE} \
                 --profiles-index \${PROFILES} \
                 --nevents \${NTHIS} \

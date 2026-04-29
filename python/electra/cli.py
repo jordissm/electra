@@ -122,8 +122,8 @@ def run_layout(run_dir: Path) -> Dict[str, Path]:
     return {
         "run": run_dir,
         "manifest": run_dir / "manifest.jsonl",
-        "ehijing_events": run_dir / "events",
-        "ehijing_logs": run_dir / "logs",
+        "ehijing_events": run_dir / "ehijing" / "events",
+        "ehijing_logs": run_dir / "ehijing" / "logs",
         "smash": run_dir / "smash",
         "meta": run_dir / "metadata",
         "profiles_root": run_dir / "profiles",
