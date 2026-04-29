@@ -209,7 +209,7 @@ def ehijing_task(
         "--hard-process-config",
         str(Path(config_file)),
         "--seed",
-        str(seed),  # enable if your ehijing supports it
+        str(seed),
     ]
 
     run(cmd)
@@ -220,7 +220,7 @@ def ehijing_task(
         "first_event_id": first_event_id,
         "number_of_events": nevents,
         "chunk_size": chunk_size,
-        "ehijing_seed": seed,  # recorded (not yet used by ehijing)
+        "ehijing_seed": seed,
         "Z": Z,
         "A": A,
         "medium_modification_mode": mode,
@@ -338,7 +338,7 @@ def cmd_ehijing(args: argparse.Namespace) -> None:
 
     config_file = Path(config_arg).resolve()
     if not config_file.exists():
-        raise FileNotFoundError(f"Missing ehijing config file: {config_file}")
+        raise FileNotFoundError(f"Missing eHIJING config file: {config_file}")
 
     run_dir = Path(run_path).resolve()
     mkdir(run_dir)

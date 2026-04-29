@@ -23,7 +23,7 @@ done
 JOB_NAME="${JOB_NAME:-electra:smash}"
 ACCOUNT="${ACCOUNT:-qgp}"
 PARTITION="${PARTITION:-qgp}"
-TIME_LIMIT="${TIME_LIMIT:-00:30:00}"
+TIME_LIMIT="${TIME_LIMIT:-12:00:00}"
 CPUS_PER_TASK="${CPUS_PER_TASK:-1}"
 MEMORY="${MEMORY:-2G}"
 
@@ -41,7 +41,7 @@ NREPLICAS="${NREPLICAS:-1000}"
 NPROFILES="${NPROFILES:-1}"
 TASK_MODE="${TASK_MODE:-one}"
 
-LOG_DIR="$RUN_DIR_HOST/runs/smash/logs"
+LOG_DIR="$RUN_DIR_HOST/smash/logs"
 
 # -----------------------------
 # Validate and convert NEVENTS
@@ -128,7 +128,7 @@ for TASK_ID in \$(seq 0 \$((NTASKS - 1))); do
         /bin/bash --noprofile --norc -lc "
             set -euo pipefail
             electra smash run \
-                --run-dir \${RUN_DIR_CONT}/runs \
+                --run-dir \${RUN_DIR_CONT} \
                 --config-file \${CONFIG_FILE} \
                 --profiles-index \${PROFILES} \
                 --nevents \${NTHIS} \
