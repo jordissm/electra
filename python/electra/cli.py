@@ -161,6 +161,7 @@ def ehijing_task(
     table_path: Path,
     config_file: Path,
     hadronization_config_file: Path,
+    dis_cuts_config_file: Path,
 ) -> None:
     layout = ehijing_run_layout(run_dir)
     mkdir(layout["events"])
@@ -209,6 +210,8 @@ def ehijing_task(
         str(Path(config_file)),
         "--hadronization-config",
         str(Path(hadronization_config_file)),
+        "--dis-cuts-config",
+        str(Path(dis_cuts_config_file)),
         "--seed",
         str(seed),
     ]
@@ -229,6 +232,7 @@ def ehijing_task(
         "tabulation_path": str(Path(table_path)),
         "hard_process_config": str(Path(config_file)),
         "hadronization_config": str(Path(hadronization_config_file)),
+        "dis_cuts_config": str(Path(dis_cuts_config_file)),
         "events_dir": str(events_dir),
     }
 
@@ -327,6 +331,7 @@ def cmd_ehijing(args: argparse.Namespace) -> None:
     table_arg = getattr(args, "tabulation_path", None)
     config_arg = getattr(args, "hard_process_config", None)
     hadronization_config_arg = getattr(args, "hadronization_config", None)
+    dis_cuts_config_arg = getattr(args, "dis_cuts_config", None)
     nevents_arg = getattr(args, "number_of_events", None)
     mode_arg = getattr(args, "medium_modification_mode", None)
 
@@ -334,6 +339,8 @@ def cmd_ehijing(args: argparse.Namespace) -> None:
         raise ValueError("Missing eHIJING hard-process config file")
     if hadronization_config_arg is None:
         raise ValueError("Missing eHIJING hadronization config file")
+    if dis_cuts_config_arg is None:
+        raise ValueError("Missing eHIJING DIS cuts config file")
     if nevents_arg is None:
         raise ValueError("Missing eHIJING number of events")
     if mode_arg is None:
@@ -351,6 +358,12 @@ def cmd_ehijing(args: argparse.Namespace) -> None:
     if not hadronization_config_file.exists():
         raise FileNotFoundError(
             f"Missing eHIJING hadronization config file: {hadronization_config_file}"
+        )
+
+    dis_cuts_config_file = Path(dis_cuts_config_arg).resolve()
+    if not dis_cuts_config_file.exists():
+        raise FileNotFoundError(
+            f"Missing eHIJING DIS cuts config file: {dis_cuts_config_file}"
         )
 
     run_dir = Path(run_path).resolve()
@@ -375,6 +388,7 @@ def cmd_ehijing(args: argparse.Namespace) -> None:
         table_path=table_path,
         config_file=config_file,
         hadronization_config_file=hadronization_config_file,
+        dis_cuts_config_file=dis_cuts_config_file,
     )
 
 
@@ -531,6 +545,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--hadronization-config",
         required=True,
         help="eHIJING hadronization setting file, e.g. input/ehijing/hadronization.setting",
+    )
+    per.add_argument(
+        "--dis-cuts-config",
+        required=True,
+        help="eHIJING DIS cuts file, e.g. input/ehijing/dis_cuts/hermes.setting",
     )
     per.set_defaults(func=cmd_ehijing)
 

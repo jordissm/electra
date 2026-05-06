@@ -18,19 +18,21 @@ TODO List
 [X] Add a begin_form_time column to the OSCAR eHIJING output
 [X] Add a xsecfac column to the OSCAR eHIJING output
 [X] Verify computation of zh in Rivet script
+[X] Assign unique run ID at runtime for eHIJING
+[X] Use unique run ID in SMASH
+[X] Move eHIJING settings to input command files
+[X] Test analysis at the eHIJING level
+[X] Move eHIJING constants to constants.hpp
+[X] Implement experimental cuts from input file
 [ ] Implement anti-freestreaming in eHIJING to t = 0 fm
 [ ] Compare to eHIJING-examples
 [ ] Read tau_form from profile in SMASH
-[ ] Move eHIJING constants to constants.hpp
 [ ] Implement Rivet run outside container
 [ ] Implement Fermi momentum
 [ ] Implement Woods-Saxon sampling
 [ ] Enforce deterministic seed behavior
 [ ] Refactor modified_ff.cpp
 [ ] Smear spatial positions in eHIJING
-[ ] Test analysis at the eHIJING level
 [ ] Feed particle list to eHIJING -> Pythia from particles.txt file
-[ ] Move eHIJING settings to input command files
-[ ] Assign unique run ID at runtime
 [ ] Use experimental data from downloaded files
 [ ] Enforce hadron forward cut for HERMES
