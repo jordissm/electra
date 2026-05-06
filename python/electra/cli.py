@@ -160,6 +160,7 @@ def ehijing_task(
     K: float,
     table_path: Path,
     config_file: Path,
+    hadronization_config_file: Path,
 ) -> None:
     layout = ehijing_run_layout(run_dir)
     mkdir(layout["events"])
@@ -178,9 +179,7 @@ def ehijing_task(
     # Ensure tables + events dirs exist (fixes your earlier filesystem error)
     mkdir(Path(table_path))
 
-    # Seed handling:
-    # Your current ehijing main.cpp does NOT accept a seed argument,
-    # so we can only *record* a deterministic seed for now.
+    # Seed handling: derive a deterministic Pythia seed for this chunk.
     PYTHIA_SEED_MAX = 900_000_000  # Pythia8 allowed max
     seed = 1 + (hash_seed(base_seed, first_event_id, nevents) % PYTHIA_SEED_MAX)
 
@@ -208,6 +207,8 @@ def ehijing_task(
         str(events_dir),
         "--hard-process-config",
         str(Path(config_file)),
+        "--hadronization-config",
+        str(Path(hadronization_config_file)),
         "--seed",
         str(seed),
     ]
@@ -227,6 +228,7 @@ def ehijing_task(
         "K": K,
         "tabulation_path": str(Path(table_path)),
         "hard_process_config": str(Path(config_file)),
+        "hadronization_config": str(Path(hadronization_config_file)),
         "events_dir": str(events_dir),
     }
 
@@ -324,11 +326,14 @@ def cmd_ehijing(args: argparse.Namespace) -> None:
     run_path = getattr(args, "run_path", None)
     table_arg = getattr(args, "tabulation_path", None)
     config_arg = getattr(args, "hard_process_config", None)
+    hadronization_config_arg = getattr(args, "hadronization_config", None)
     nevents_arg = getattr(args, "number_of_events", None)
     mode_arg = getattr(args, "medium_modification_mode", None)
 
     if config_arg is None:
-        raise ValueError("Missing eHIJING config file")
+        raise ValueError("Missing eHIJING hard-process config file")
+    if hadronization_config_arg is None:
+        raise ValueError("Missing eHIJING hadronization config file")
     if nevents_arg is None:
         raise ValueError("Missing eHIJING number of events")
     if mode_arg is None:
@@ -338,7 +343,15 @@ def cmd_ehijing(args: argparse.Namespace) -> None:
 
     config_file = Path(config_arg).resolve()
     if not config_file.exists():
-        raise FileNotFoundError(f"Missing eHIJING config file: {config_file}")
+        raise FileNotFoundError(
+            f"Missing eHIJING hard-process config file: {config_file}"
+        )
+
+    hadronization_config_file = Path(hadronization_config_arg).resolve()
+    if not hadronization_config_file.exists():
+        raise FileNotFoundError(
+            f"Missing eHIJING hadronization config file: {hadronization_config_file}"
+        )
 
     run_dir = Path(run_path).resolve()
     mkdir(run_dir)
@@ -361,6 +374,7 @@ def cmd_ehijing(args: argparse.Namespace) -> None:
         K=float(args.K),
         table_path=table_path,
         config_file=config_file,
+        hadronization_config_file=hadronization_config_file,
     )
 
 
@@ -511,7 +525,12 @@ def build_parser() -> argparse.ArgumentParser:
     per.add_argument(
         "--hard-process-config",
         required=True,
-        help="eHIJING config/setting file, e.g. input/ehijing/experiments/hermes.setting",
+        help="eHIJING hard-process setting file, e.g. input/ehijing/hermes.setting",
+    )
+    per.add_argument(
+        "--hadronization-config",
+        required=True,
+        help="eHIJING hadronization setting file, e.g. input/ehijing/hadronization.setting",
     )
     per.set_defaults(func=cmd_ehijing)
 

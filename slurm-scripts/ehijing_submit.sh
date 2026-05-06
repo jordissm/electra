@@ -43,6 +43,7 @@ A=2 #84
 MED_MODIF_MODE=0
 K=4.0
 CONFIG_PATH="${CONFIG_PATH:-$PROJECT_ROOT/input/ehijing/hermes.setting}"
+HADRONIZATION_CONFIG_PATH="${HADRONIZATION_CONFIG_PATH:-$PROJECT_ROOT/input/ehijing/hadronization.setting}"
 
 NEVENTS="${NEVENTS:-1}"
 CHUNK_SIZE="${CHUNK_SIZE:-1000}"
@@ -151,6 +152,7 @@ OUTPUT_CONT="${OUTPUT_CONT}"
 EHIJING_RUN_DIR_CONT="${EHIJING_RUN_DIR_CONT}"
 TABLE_PATH="${TABLE_PATH}"
 CONFIG_PATH="${CONFIG_PATH}"
+HADRONIZATION_CONFIG_PATH="${HADRONIZATION_CONFIG_PATH}"
 
 Z="${Z}"
 A="${A}"
@@ -192,6 +194,7 @@ apptainer exec \
             --run-path \${EHIJING_RUN_DIR_CONT} \
             --tabulation-path \${TASK_TABLE_PATH} \
             --hard-process-config \${CONFIG_PATH} \
+            --hadronization-config \${HADRONIZATION_CONFIG_PATH} \
             --number-of-events \${TASK_NEVENTS} \
             --first-event-id \${FIRST_EVENT_ID} \
             --chunk-size \${CHUNK_SIZE} \

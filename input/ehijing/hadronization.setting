@@ -1,0 +1,28 @@
+# Hadronizer-local Pythia settings.
+# The constructor keeps standalone execution toggles such as ProcessLevel:all = off.
+
+# Parton tune and PDF set.
+Tune:pp = 19
+PDF:pSet = 12
+
+# Lund string breaking conditions.
+# stopMass = 0.0 GeV differs from the Pythia8 default to match HERMES pion/kaon FF measurements.
+StringFragmentation:stopMass = 0.0
+HadronLevel:mStringMin = 0.5
+
+# Decays are handled downstream by SMASH.
+HadronLevel:Decay = off
+
+# JORDI: These lines are different from ehijing-default-Briet-frame.cpp
+PDF:nPDFSetA = 0
+PDF:nPDFSetB = 0
+
+# Vertex information.
+PartonVertex:setVertex = on
+PartonVertex:modeVertex = 2
+PartonVertex:ProtonRadius = 0.85
+PartonVertex:EmissionWidth = 0.1
+Fragmentation:setVertices = on
+HadronVertex:mode = 0
+HadronVertex:smearOn = on
+HadronVertex:xySmear = 0.7
