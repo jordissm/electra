@@ -1,19 +1,9 @@
-// Standalone OSCAR analysis mirroring rivet-analyses/electra/EHIJING_SMASH_2026_DNDPTDZ.cc.
 //
 // Produces (1/Nevt) dN/(dpT dz_h) vs pT in fixed z_h slices for:
 //   pi+, pi-, K+, K-
 //
 // Example:
-//   c++ -std=c++17 -O2 -Wall -Wextra -pedantic test/analyze_oscar_dndptdz.cpp -o test/analyze_oscar_dndptdz
-//   ./test/analyze_oscar_dndptdz \
-//     --meta build-test/output/ehijing/DISKinematics.meta.jsonl \
-//     --out dndptdz.yoda \
-//     build-test/output/ehijing/events/events_00000000-00000099/event_*.oscar
-//
-// If an input path is named event_########.oscar, that filename index is used as
-// the DIS metadata event id. This handles per-event OSCAR files whose internal
-// header is reset to "# event 0". Other OSCAR files use the event number from
-// their "# event N out ..." header.
+//   c++ -std=c++17 -O3 -march=native -Wall -Wextra -pedantic analyze_oscar_dndptdz.cpp -o analyze_oscar_dndptdz
 
 #include <algorithm>
 #include <array>
@@ -227,13 +217,15 @@ double pT2WrtQ(const FourVec& ph, const FourVec& q) {
   return mag2(pT);
 }
 
-std::string trim(const std::string& s) {
+/*
+  std::string trim(const std::string& s) {
   std::size_t first = 0;
   while (first < s.size() && std::isspace(static_cast<unsigned char>(s[first]))) ++first;
   std::size_t last = s.size();
   while (last > first && std::isspace(static_cast<unsigned char>(s[last - 1]))) --last;
   return s.substr(first, last - first);
 }
+*/
 
 std::vector<std::string> readJsonObjects(const std::string& path) {
   std::ifstream in(path);
@@ -362,6 +354,35 @@ std::unordered_map<int, MetaDIS> loadMeta(const std::string& path) {
   return meta;
 }
 
+std::vector<std::string> readPathList(const std::string& path) {
+    std::istream* in = nullptr;
+    std::ifstream file;
+
+    if (path == "-") {
+        in = &std::cin;
+    } else {
+        file.open(path);
+        if (!file) throw std::runtime_error("Cannot open file list: " + path);
+        in = &file;
+    }
+
+    std::vector<std::string> paths;
+    std::string line;
+
+    while (std::getline(*in, line)) {
+        //line = trim(line);
+        if (line.empty()) continue;
+        if (line[0] == '#') continue;
+        paths.push_back(line);
+    }
+
+    if (paths.empty()) {
+        throw std::runtime_error("File list is empty: " + path);
+    }
+
+    return paths;
+}
+
 int speciesIndex(int pdg) {
   switch (pdg) {
     case 211: return 0;
@@ -414,12 +435,14 @@ struct Config {
   int ptNBins = 20;
   FrameChoice frame = FrameChoice::BREIT;
   std::vector<std::string> oscarPaths;
+  std::vector<std::string> fileListPaths;
 };
 
 void printUsage(const char* argv0) {
   std::cerr
       << "Usage: " << argv0 << " --meta DISKinematics.meta.jsonl [options] file1.oscar [file2.oscar ...]\n"
       << "\nOptions:\n"
+      << "  --file-list PATH    Read OSCAR input paths from PATH; use '-' for stdin\n"
       << "  --out PATH          Output YODA-like histogram file (default: dndptdz.yoda)\n"
       << "  --pt-min VALUE      pT histogram minimum in GeV (default: 0.0)\n"
       << "  --pt-max VALUE      pT histogram maximum in GeV (default: 1.1)\n"
@@ -442,6 +465,8 @@ Config parseArgs(int argc, char** argv) {
       std::exit(0);
     } else if (arg == "--meta") {
       cfg.metaPath = requireValue(arg);
+    } else if (arg == "--file-list") {
+      cfg.fileListPaths.push_back(requireValue(arg));
     } else if (arg == "--out") {
       cfg.outPath = requireValue(arg);
     } else if (arg == "--pt-min") {
@@ -460,7 +485,12 @@ Config parseArgs(int argc, char** argv) {
   }
 
   if (cfg.metaPath.empty()) throw std::runtime_error("Missing required --meta path");
+  for (const std::string& listPath : cfg.fileListPaths) {
+      std::vector<std::string> listed = readPathList(listPath);
+      cfg.oscarPaths.insert(cfg.oscarPaths.end(), listed.begin(), listed.end());
+  }
   if (cfg.oscarPaths.empty()) throw std::runtime_error("Provide at least one OSCAR file");
+
   if (!std::isfinite(cfg.ptMin) || !std::isfinite(cfg.ptMax) || cfg.ptMax <= cfg.ptMin) {
     throw std::runtime_error("Invalid pT axis: require finite --pt-max > --pt-min");
   }
@@ -479,43 +509,86 @@ bool parseEventHeader(const std::string& line, int& eventNumber) {
 }
 
 bool eventIdFromFilename(const std::string& path, int& eventNumber) {
-  const std::size_t slash = path.find_last_of("/\\");
-  const std::string name = slash == std::string::npos ? path : path.substr(slash + 1);
-  const std::string prefix = "event_";
-  const std::string suffix = ".oscar";
-  if (name.rfind(prefix, 0) != 0) return false;
-  if (name.size() <= prefix.size() + suffix.size()) return false;
-  if (name.substr(name.size() - suffix.size()) != suffix) return false;
 
-  const std::string digits = name.substr(prefix.size(), name.size() - prefix.size() - suffix.size());
-  if (digits.empty()) return false;
-  for (char c : digits) {
-    if (!std::isdigit(static_cast<unsigned char>(c))) return false;
-  }
-  eventNumber = std::stoi(digits);
-  return true;
-}
+  const std::string prefix = "event_";
+
+  std::size_t pos = 0;
+  while ((pos = path.find(prefix, pos)) != std::string::npos) {
+      const std::size_t digitStart = pos + prefix.size();
+      std::size_t digitEnd = digitStart;
+
+      while (digitEnd < path.size() &&
+              std::isdigit(static_cast<unsigned char>(path[digitEnd]))) {
+          ++digitEnd;
+      }
+
+      if (digitEnd > digitStart) {
+          const bool goodEnd =
+              digitEnd == path.size() ||
+              path[digitEnd] == '.' ||
+              path[digitEnd] == '/' ||
+              path[digitEnd] == '\\';
+
+          if (goodEnd) {
+              eventNumber = std::stoi(path.substr(digitStart, digitEnd - digitStart));
+              return true;
+          }
+    }
+      pos = digitEnd;
+    }
+  return false;
+    }
+
 
 bool isEventEnd(const std::string& line) {
   return line.rfind("# event ", 0) == 0 && line.find(" end ") != std::string::npos;
 }
 
 bool parseParticleLine(const std::string& line, Particle& particle) {
-  std::istringstream iss(line);
-  double t = 0.0;
-  double x = 0.0;
-  double y = 0.0;
-  double z = 0.0;
-  int id = 0;
-  int charge = 0;
-  double beginFormTime = 0.0;
-  double xsecfac = 0.0;
-  if (!(iss >> t >> x >> y >> z >> particle.mass >> particle.p.E >> particle.p.px >> particle.p.py >>
-        particle.p.pz >> particle.pdg >> id >> charge >> beginFormTime >> xsecfac)) {
-    return false;
-  }
-  return true;
+
+    const char* p = line.c_str();
+    char* end = nullptr;
+
+    auto nextDouble = [&]() -> double {
+        double v = std::strtod(p, &end);
+        if (end == p) throw std::runtime_error("bad_double");
+        p = end;
+        return v;
+    };
+
+    auto nextInt = [&]() -> int {
+        long v = std::strtol(p, &end, 10);
+        if (end == p) throw std::runtime_error("bad int");
+        p = end;
+        return static_cast<int>(v);
+    };
+
+    try {
+        const double t = nextDouble();
+        const double x = nextDouble();
+        const double y = nextDouble();
+        const double z = nextDouble();
+        (void)t; (void)x; (void)y; (void)z;
+
+        particle.mass = nextDouble();
+        particle.p.E = nextDouble();
+        particle.p.px = nextDouble();
+        particle.p.py = nextDouble();
+        particle.p.pz = nextDouble();
+        particle.pdg = nextInt();
+
+        const int id = nextInt();
+        const int charge = nextInt();
+        (void)id;
+        (void)charge;
+    } catch (...) {
+        return false;
+    }
+
+    return true;
+
 }
+
 
 struct AnalysisState {
   std::array<std::array<Hist1D, NZ>, NSPEC> h;
@@ -587,7 +660,7 @@ void analyzeOscarFile(const std::string& path, const std::unordered_map<int, Met
   bool inEvent = false;
 
   while (std::getline(in, line)) {
-    line = trim(line);
+    //line = trim(line);
     if (line.empty()) continue;
 
     int eventNumber = -1;
@@ -707,8 +780,19 @@ int main(int argc, char** argv) {
       }
     }
 
-    for (const std::string& path : cfg.oscarPaths) {
-      analyzeOscarFile(path, meta, cfg.frame, state);
+    const std::size_t total = cfg.oscarPaths.size();
+
+    for (std::size_t i = 0; i < total; ++i) {
+        analyzeOscarFile(cfg.oscarPaths[i], meta, cfg.frame, state);
+
+        if (i % 100 == 0 || i + 1 == total) {
+            std::cerr
+                << "[progress] "
+                << (i + 1) << "/" << total
+                << " (" << (100.0 * (i + 1) / total) << "%)"
+                << " | events=" << state.eventsSeen
+                << '\n';
+        }
     }
 
     finalize(state);
