@@ -67,6 +67,7 @@ patch_slurm_scripts() {
   sed -i \
     -e "s|^PROJECT_ROOT=.*$|PROJECT_ROOT=\"\${PROJECT_ROOT:-$PREFIX}\"|" \
     -e "s|^CONFIG_PATH=.*$|CONFIG_PATH=\"\${CONFIG_PATH:-$INPUT_DIR/ehijing/hermes.setting}\"|" \
+    -e "s|^HADRONIZATION_CONFIG_PATH=.*$|HADRONIZATION_CONFIG_PATH=\"\${HADRONIZATION_CONFIG_PATH:-$INPUT_DIR/ehijing/hadronization.setting}\"|" \
     "$dir/ehijing_submit.sh"
   fi
 
