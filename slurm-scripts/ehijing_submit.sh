@@ -1,6 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SLURM_CONFIG="${SLURM_CONFIG:-$SCRIPT_DIR/cluster.env}"
+
+if [[ -f "$SLURM_CONFIG" ]]; then
+    # shellcheck source=/dev/null
+    set +u
+    source "$SLURM_CONFIG"
+    set -u
+fi
+
 # -----------------------------
 # Parse key=value arguments
 # -----------------------------
@@ -20,15 +30,17 @@ done
 # -----------------------------
 # User-tunable parameters
 # -----------------------------
-JOB_NAME="${JOB_NAME:-electra:ehijing}"
+JOB_NAME="${JOB_NAME:-${JOB_NAME_PREFIX:-electra}:ehijing}"
 ACCOUNT="${ACCOUNT:-qgp}"
 PARTITION="${PARTITION:-qgp}"
-TIME_LIMIT="${TIME_LIMIT:-00:30:00}"
-CPUS_PER_TASK="${CPUS_PER_TASK:-1}"
-MEMORY="${MEMORY:-2G}"
+TIME_LIMIT="${TIME_LIMIT:-${EHIJING_TIME_LIMIT:-${DEFAULT_TIME_LIMIT:-00:30:00}}}"
+POST_TIME_LIMIT="${POST_TIME_LIMIT:-${EHIJING_POST_TIME_LIMIT:-00:30:00}}"
+CPUS_PER_TASK="${CPUS_PER_TASK:-${DEFAULT_CPUS_PER_TASK:-1}}"
+MEMORY="${MEMORY:-${DEFAULT_MEMORY:-2G}}"
+POST_MEMORY="${POST_MEMORY:-${EHIJING_POST_MEMORY:-1G}}"
 
 # Find project root
-PROJECT_ROOT="${PROJECT_ROOT:-@PROJECT_ROOT@}"
+PROJECT_ROOT="${PROJECT_ROOT:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 
 # Container image path
 IMG="${IMG:-/scratch/$USER/containers/electra.sif}"
@@ -210,9 +222,9 @@ sbatch --dependency=afterok:${ARRAY_JOB_ID} <<EOF
 #SBATCH -J ${JOB_NAME}:post
 #SBATCH -A ${ACCOUNT}
 #SBATCH -p ${PARTITION}
-#SBATCH -t 00:30:00
+#SBATCH -t ${POST_TIME_LIMIT}
 #SBATCH --cpus-per-task=1
-#SBATCH --mem=1G
+#SBATCH --mem=${POST_MEMORY}
 #SBATCH -o /dev/null
 #SBATCH -e /dev/null
 

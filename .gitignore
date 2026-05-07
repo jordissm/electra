@@ -1,5 +1,7 @@
 # cluster/local run products
 # ========================
+slurm-scripts/cluster.env
+
 # Container images
 *.tar
 *.sif

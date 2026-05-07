@@ -1,6 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SLURM_CONFIG="${SLURM_CONFIG:-$SCRIPT_DIR/cluster.env}"
+
+if [[ -f "$SLURM_CONFIG" ]]; then
+    # shellcheck source=/dev/null
+    set +u
+    source "$SLURM_CONFIG"
+    set -u
+fi
+
 # -----------------------------
 # Parse key=value arguments
 # -----------------------------
@@ -20,15 +30,16 @@ done
 # -----------------------------
 # User-tunable parameters
 # -----------------------------
-JOB_NAME="${JOB_NAME:-electra:smash}"
+JOB_NAME="${JOB_NAME:-${JOB_NAME_PREFIX:-electra}:smash}"
 ACCOUNT="${ACCOUNT:-qgp}"
 PARTITION="${PARTITION:-qgp}"
-TIME_LIMIT="${TIME_LIMIT:-12:00:00}"
-CPUS_PER_TASK="${CPUS_PER_TASK:-1}"
-MEMORY="${MEMORY:-2G}"
+TIME_LIMIT="${TIME_LIMIT:-${SMASH_TIME_LIMIT:-${DEFAULT_TIME_LIMIT:-12:00:00}}}"
+CPUS_PER_TASK="${CPUS_PER_TASK:-${DEFAULT_CPUS_PER_TASK:-1}}"
+MEMORY="${MEMORY:-${DEFAULT_MEMORY:-2G}}"
 
-PROJECT_ROOT="${PROJECT_ROOT:-@PROJECT_ROOT@}"
-RUN_DIR_HOST="${RUN_DIR_HOST:-$PROJECT_ROOT/output}"
+PROJECT_ROOT="${PROJECT_ROOT:-$(cd "$SCRIPT_DIR/.." && pwd)}"
+OUTPUT_HOST="${OUTPUT_HOST:-$PROJECT_ROOT/output}"
+RUN_DIR_HOST="${RUN_DIR_HOST:-$OUTPUT_HOST}"
 IMG="${IMG:-/scratch/$USER/containers/electra.sif}"
 
 RUN_DIR_CONT="${RUN_DIR_CONT:-/workspace/output}"
