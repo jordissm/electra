@@ -12,6 +12,15 @@ HadronLevel:mStringMin = 0.5
 
 # Decays are handled downstream by SMASH.
 HadronLevel:Decay = off
+111:mayDecay = off
+211:mayDecay = off
+221:mayDecay = off
+321:mayDecay = off
+3122:mayDecay = off
+3212:mayDecay = off
+3312:mayDecay = off
+3322:mayDecay = off
+3334:mayDecay = off
 
 # JORDI: These lines are different from ehijing-default-Briet-frame.cpp
 PDF:nPDFSetA = 0
