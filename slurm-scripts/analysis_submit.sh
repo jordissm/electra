@@ -1,15 +1,223 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+    cat <<EOF
+Usage:
+  bash slurm-scripts/analysis_submit.sh RUN_NAME_OR_ID [key=value ...]
+  bash slurm-scripts/analysis_submit.sh RUN=RUN_NAME_OR_ID [key=value ...]
+
+Examples:
+  bash slurm-scripts/analysis_submit.sh 6
+  bash slurm-scripts/analysis_submit.sh my_run PT_NBINS=10
+
+Options can also be supplied as environment variables:
+  SLURM_CONFIG, PROJECT_ROOT, OUTPUT_HOST, RUNS_DIR, RUN_DIR, ACCOUNT, PARTITION,
+  INDEX_TIME_LIMIT, ANALYSIS_TIME_LIMIT, CPUS_PER_TASK, MEMORY, ANALYZER,
+  OSCAR_PATTERN, PT_MIN, PT_MAX, PT_NBINS, FRAME, OUT
+EOF
+}
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SLURM_CONFIG="${SLURM_CONFIG:-$SCRIPT_DIR/cluster.env}"
+
+if [[ -f "$SLURM_CONFIG" ]]; then
+    # shellcheck source=/dev/null
+    set +u
+    source "$SLURM_CONFIG"
+    set -u
+fi
+
+# -----------------------------
+# Parse positional run name/id and key=value arguments
+# -----------------------------
+RUN="${RUN:-${RUN_ID:-${RUN_NAME:-${NAME:-}}}}"
+
+for arg in "$@"; do
+    case "$arg" in
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        *=*)
+            key="${arg%%=*}"
+            val="${arg#*=}"
+            export "$key"="$val"
+            case "$key" in
+                RUN|RUN_ID|RUN_NAME|NAME)
+                    RUN="$val"
+                    ;;
+            esac
+            ;;
+        *)
+            if [[ -z "$RUN" ]]; then
+                RUN="$arg"
+            else
+                echo "Warning: ignoring extra positional argument '$arg'" >&2
+            fi
+            ;;
+    esac
+done
+
+if [[ -z "$RUN" && -n "${RUN_DIR:-}" ]]; then
+    RUN="$(basename "$RUN_DIR")"
+fi
+
+if [[ -z "$RUN" ]]; then
+    usage >&2
+    echo >&2
+    echo "Error: provide a run name or numeric run ID." >&2
+    exit 1
+fi
+
+# -----------------------------
+# User-tunable parameters
+# -----------------------------
+PROJECT_ROOT="${PROJECT_ROOT:-$(cd "$SCRIPT_DIR/.." && pwd)}"
+OUTPUT_HOST="${OUTPUT_HOST:-$PROJECT_ROOT/output}"
+RUNS_DIR="${RUNS_DIR:-$OUTPUT_HOST/runs}"
+
+JOB_NAME="${JOB_NAME:-${JOB_NAME_PREFIX:-electra}:analysis}"
+ACCOUNT="${ACCOUNT:-qgp}"
+PARTITION="${PARTITION:-qgp}"
+INDEX_TIME_LIMIT="${INDEX_TIME_LIMIT:-00:30:00}"
+ANALYSIS_TIME_LIMIT="${ANALYSIS_TIME_LIMIT:-${DEFAULT_TIME_LIMIT:-12:00:00}}"
+CPUS_PER_TASK="${CPUS_PER_TASK:-${DEFAULT_CPUS_PER_TASK:-1}}"
+MEMORY="${MEMORY:-${DEFAULT_MEMORY:-2G}}"
+INDEX_MEMORY="${INDEX_MEMORY:-1G}"
+
+ANALYZER="${ANALYZER:-$PROJECT_ROOT/analyze_oscar_dndptdz}"
+OSCAR_PATTERN="${OSCAR_PATTERN:-*.oscar}"
+PT_MIN="${PT_MIN:-0.0}"
+PT_MAX="${PT_MAX:-1.1}"
+PT_NBINS="${PT_NBINS:-10}"
+FRAME="${FRAME:-BREIT}"
+
+if [[ -n "${RUN_DIR:-}" ]]; then
+    :
+elif [[ "$RUN" = /* || "$RUN" == .* || "$RUN" == */* ]]; then
+    RUN_DIR="$RUN"
+else
+    RUN_DIR="$RUNS_DIR/$RUN"
+    LEGACY_RUN_DIR="$PROJECT_ROOT/runs/$RUN"
+    if [[ ! -d "$RUN_DIR" && -d "$LEGACY_RUN_DIR" ]]; then
+        RUN_DIR="$LEGACY_RUN_DIR"
+    fi
+fi
+
+if [[ -d "$RUN_DIR" ]]; then
+    RUN_DIR="$(cd "$RUN_DIR" && pwd)"
+fi
+EHIJING_DIR="$RUN_DIR/ehijing"
+EVENTS_DIR="$EHIJING_DIR/events"
+META_FILE="${META_FILE:-$EHIJING_DIR/DISKinematics.meta.jsonl}"
+ANALYSIS_DIR="${ANALYSIS_DIR:-$RUN_DIR/analysis}"
+LOG_DIR="${LOG_DIR:-$ANALYSIS_DIR/logs}"
+FILE_LIST="${FILE_LIST:-$ANALYSIS_DIR/particle_lists_files.txt}"
+OUT="${OUT:-$ANALYSIS_DIR/dndptdz.yoda}"
+
+if [[ ! -d "$RUN_DIR" ]]; then
+    echo "Error: run directory not found: $RUN_DIR" >&2
+    if [[ -n "${LEGACY_RUN_DIR:-}" && "$LEGACY_RUN_DIR" != "$RUN_DIR" ]]; then
+        echo "       Also checked: $LEGACY_RUN_DIR" >&2
+    fi
+    exit 1
+fi
+if [[ ! -d "$EVENTS_DIR" ]]; then
+    echo "Error: eHIJING events directory not found: $EVENTS_DIR" >&2
+    exit 1
+fi
+if [[ ! -f "$META_FILE" ]]; then
+    echo "Error: DIS kinematics metadata not found: $META_FILE" >&2
+    exit 1
+fi
+if [[ ! -x "$ANALYZER" ]]; then
+    echo "Error: analyzer executable not found or not executable: $ANALYZER" >&2
+    exit 1
+fi
+
+mkdir -p "$ANALYSIS_DIR" "$LOG_DIR"
+
+echo "Submitting OSCAR analysis:"
+echo "  run          : $RUN"
+echo "  run dir      : $RUN_DIR"
+echo "  events dir   : $EVENTS_DIR"
+echo "  meta file    : $META_FILE"
+echo "  file list    : $FILE_LIST"
+echo "  output       : $OUT"
+echo "  analyzer     : $ANALYZER"
+
+# -----------------------------
+# Step 1: index OSCAR files
+# -----------------------------
+INDEX_JOB_ID=$(
+sbatch --parsable <<EOF
 #!/bin/bash
-
-#SBATCH -J electra:analysis
-#SBATCH -A qgp
-#SBATCH -p qgp
-#SBATCH -t 12:00:00
+#SBATCH -J ${JOB_NAME}:index
+#SBATCH -A ${ACCOUNT}
+#SBATCH -p ${PARTITION}
+#SBATCH -t ${INDEX_TIME_LIMIT}
 #SBATCH --cpus-per-task=1
-#SBATCH --mem=2G
-#SBATCH -o analysis.out
-#SBATCH -e analysis.err
+#SBATCH --mem=${INDEX_MEMORY}
+#SBATCH -o ${LOG_DIR}/index_%j.out
+#SBATCH -e ${LOG_DIR}/index_%j.err
 
-#LC_ALL=C find runs/6/ehijing/events -name '*.oscar' > particle_lists_files.txt
-#LC_ALL=C find runs/5/ehijing/events -name 'particle_lists.oscar' > particle_lists_files.txt
+set -euo pipefail
 
-./analyze_oscar_dndptdz --meta runs/6/ehijing/DISKinematics.meta.jsonl --file-list particle_lists_files.txt --out dndptdz.yoda --pt-nbins 10
+EVENTS_DIR="${EVENTS_DIR}"
+FILE_LIST="${FILE_LIST}"
+OSCAR_PATTERN="${OSCAR_PATTERN}"
+
+mkdir -p "\$(dirname "\${FILE_LIST}")"
+
+LC_ALL=C find "\${EVENTS_DIR}" -type f -name "\${OSCAR_PATTERN}" | sort > "\${FILE_LIST}"
+
+NFILES=\$(wc -l < "\${FILE_LIST}")
+echo "Indexed \${NFILES} OSCAR files into \${FILE_LIST}"
+
+if [[ "\${NFILES}" -eq 0 ]]; then
+    echo "Error: no OSCAR files matching '\${OSCAR_PATTERN}' under \${EVENTS_DIR}" >&2
+    exit 1
+fi
+EOF
+)
+
+# -----------------------------
+# Step 2: run analysis after indexing succeeds
+# -----------------------------
+ANALYSIS_JOB_ID=$(
+sbatch --parsable --dependency=afterok:${INDEX_JOB_ID} <<EOF
+#!/bin/bash
+#SBATCH -J ${JOB_NAME}:run
+#SBATCH -A ${ACCOUNT}
+#SBATCH -p ${PARTITION}
+#SBATCH -t ${ANALYSIS_TIME_LIMIT}
+#SBATCH --cpus-per-task=${CPUS_PER_TASK}
+#SBATCH --mem=${MEMORY}
+#SBATCH -o ${LOG_DIR}/analysis_%j.out
+#SBATCH -e ${LOG_DIR}/analysis_%j.err
+
+set -euo pipefail
+
+ANALYZER="${ANALYZER}"
+META_FILE="${META_FILE}"
+FILE_LIST="${FILE_LIST}"
+OUT="${OUT}"
+PT_MIN="${PT_MIN}"
+PT_MAX="${PT_MAX}"
+PT_NBINS="${PT_NBINS}"
+FRAME="${FRAME}"
+
+"\${ANALYZER}" \
+    --meta "\${META_FILE}" \
+    --file-list "\${FILE_LIST}" \
+    --out "\${OUT}" \
+    --pt-min "\${PT_MIN}" \
+    --pt-max "\${PT_MAX}" \
+    --pt-nbins "\${PT_NBINS}" \
+    --frame "\${FRAME}"
+EOF
+)
+
+echo "Submitted index job   : ${INDEX_JOB_ID}"
+echo "Submitted analysis job: ${ANALYSIS_JOB_ID} (afterok:${INDEX_JOB_ID})"
