@@ -1,5 +1,4 @@
 # Hadronizer-local Pythia settings.
-# The constructor keeps standalone execution toggles such as ProcessLevel:all = off.
 
 # Parton tune and PDF set.
 Tune:pp = 19
@@ -22,7 +21,6 @@ HadronLevel:Decay = off
 3322:mayDecay = off
 3334:mayDecay = off
 
-# JORDI: These lines are different from ehijing-default-Briet-frame.cpp
 PDF:nPDFSetA = 0
 PDF:nPDFSetB = 0
 
@@ -35,3 +33,7 @@ Fragmentation:setVertices = on
 HadronVertex:mode = 0
 HadronVertex:smearOn = on
 HadronVertex:xySmear = 0.7
+
+# Make energy-momentum conservation in PYTHIA more precise
+Check:epTolErr = 1e-6
+Check:epTolWarn = 1e-8
