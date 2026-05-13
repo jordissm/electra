@@ -6,8 +6,6 @@ General:
     Time_Step_Mode: Fixed
     End_Time:       250.0
     Randomseed:     -1
-    Cross_Section_Scaling_Factor:
-        Type: File
 
 Modi:
     List:
@@ -16,7 +14,10 @@ Modi:
 Output:
     Output_Interval: 50.0
     Particles:
-        Format: ["HepMC_asciiv3", "Oscar2013"]
+        Format: ["Oscar2013"]
         Extended: True
-    Collisions:
-        Format: ["HepMC_asciiv3", "Oscar2013"]
+
+Collision_Term:
+    Cross_Section_Formation_Scaling:
+        Profile:
+            Formation_Time: 1.0

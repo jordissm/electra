@@ -308,10 +308,11 @@ def smash_physical_event_task(
         ),
         "-c",
         (
-            "General: { Cross_Section_Scaling_Factor: { "
-            "Type: File, "
+            "Collision_Term: { Cross_Section_Formation_Scaling: { "
+            "Profile: { "
+            f"Formation_Time: '{1.0}', "
             f"Path: '{profile_path}' "
-            "} }"
+            "} } }"
         ),
         "-o",
         str(out_dir),
