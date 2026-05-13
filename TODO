@@ -24,15 +24,15 @@ TODO List
 [X] Test analysis at the eHIJING level
 [X] Move eHIJING constants to constants.hpp
 [X] Implement experimental cuts from input file
+[X] Read tau_form from input config file
 [ ] Implement anti-freestreaming in eHIJING to t = 0 fm
+[ ] Smear spatial positions in eHIJING
 [ ] Compare to eHIJING-examples
-[ ] Read tau_form from profile in SMASH
 [ ] Implement Rivet run outside container
 [ ] Implement Fermi momentum
-[ ] Implement Woods-Saxon sampling
-[ ] Enforce deterministic seed behavior
+[ ] Implement Woods-Saxon sampling | import TRENTo nucleon configurations
+[ ] Enforce deterministic seed behavior in eHIJING
 [ ] Refactor modified_ff.cpp
-[ ] Smear spatial positions in eHIJING
 [ ] Feed particle list to eHIJING -> Pythia from particles.txt file
 [ ] Use experimental data from downloaded files
 [ ] Enforce hadron forward cut for HERMES
