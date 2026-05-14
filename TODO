@@ -36,3 +36,4 @@ TODO List
 [ ] Feed particle list to eHIJING -> Pythia from particles.txt file
 [ ] Use experimental data from downloaded files
 [ ] Enforce hadron forward cut for HERMES
+[ ] Create plotting scripts for nuclear modification factor

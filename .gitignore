@@ -15,16 +15,13 @@ src/
 output/
 
 # ========================
-# Python
+# Python artifacts
+__pycache__/
 python/electra.egg-info
 
 # ========================
 # VSCode
 .vscode/
-
-# ========================
-# Rivet output directories
-rivet_out_*/**
 
 # ========================
 # macOS
@@ -33,7 +30,6 @@ rivet_out_*/**
 # ========================
 # Build files
 electra-shell
-build-test/
 
 # ========================
 modified_files/
@@ -42,4 +38,14 @@ modified_files/
 # Test output
 test/
 
-docs/dev/*
+# ========================
+# Development documentation
+docs/
+
+# ========================
+# Analysis output
+analysis/
+
+# ========================
+# Development directory
+dev/
