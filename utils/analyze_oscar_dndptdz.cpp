@@ -217,6 +217,27 @@ double pT2WrtQ(const FourVec& ph, const FourVec& q) {
   return mag2(pT);
 }
 
+double feynmanX(const FourVec& ph, const FourVec& P, const FourVec& q) {
+  FourVec H{P.E + q.E, P.px + q.px, P.py + q.py, P.pz + q.pz};
+  const double W2 = minkowskiDot(H, H);
+  if (!std::isfinite(W2) || W2 <= 0.0 || H.E <= 0.0) return std::numeric_limits<double>::quiet_NaN();
+
+  const double W = std::sqrt(W2);
+  const Vec3 beta{-H.px / H.E, -H.py / H.E, -H.pz / H.E};
+
+  FourVec phStar = ph;
+  FourVec qStar = q;
+  boostBy(phStar, beta);
+  boostBy(qStar, beta);
+
+  const Vec3 qv = p3(qStar);
+  const double qmag = mag(qv);
+  if (!std::isfinite(qmag) || qmag == 0.0) return std::numeric_limits<double>::quiet_NaN();
+
+  const double pL = dot(p3(phStar), qv) / qmag;
+  return 2.0 * pL / W;
+}
+
 /*
   std::string trim(const std::string& s) {
   std::size_t first = 0;
@@ -433,6 +454,8 @@ struct Config {
   double ptMin = 0.0;
   double ptMax = 1.1;
   int ptNBins = 20;
+  double xfMin = 0.0;
+  double xfMax = std::numeric_limits<double>::infinity();
   FrameChoice frame = FrameChoice::BREIT;
   std::vector<std::string> oscarPaths;
   std::vector<std::string> fileListPaths;
@@ -447,6 +470,8 @@ void printUsage(const char* argv0) {
       << "  --pt-min VALUE      pT histogram minimum in GeV (default: 0.0)\n"
       << "  --pt-max VALUE      pT histogram maximum in GeV (default: 1.1)\n"
       << "  --pt-nbins N        Number of pT bins (default: 20)\n"
+      << "  --xf-min VALUE      Minimum Feynman x in gamma*-target CM (default: 0.0)\n"
+      << "  --xf-max VALUE      Maximum Feynman x in gamma*-target CM (default: no upper cut)\n"
       << "  --frame NAME        pT frame: LAB, TRF, or BREIT (default: BREIT)\n"
       << "  --help              Show this help\n";
 }
@@ -475,6 +500,10 @@ Config parseArgs(int argc, char** argv) {
       cfg.ptMax = std::stod(requireValue(arg));
     } else if (arg == "--pt-nbins") {
       cfg.ptNBins = std::stoi(requireValue(arg));
+    } else if (arg == "--xf-min") {
+      cfg.xfMin = std::stod(requireValue(arg));
+    } else if (arg == "--xf-max") {
+      cfg.xfMax = std::stod(requireValue(arg));
     } else if (arg == "--frame") {
       cfg.frame = parseFrame(requireValue(arg));
     } else if (!arg.empty() && arg[0] == '-') {
@@ -495,6 +524,10 @@ Config parseArgs(int argc, char** argv) {
     throw std::runtime_error("Invalid pT axis: require finite --pt-max > --pt-min");
   }
   if (cfg.ptNBins <= 0) throw std::runtime_error("--pt-nbins must be positive");
+  if (!std::isfinite(cfg.xfMin)) throw std::runtime_error("--xf-min must be finite");
+  if (std::isnan(cfg.xfMax) || cfg.xfMax <= cfg.xfMin) {
+    throw std::runtime_error("Invalid Feynman x cut: require --xf-max > --xf-min");
+  }
   return cfg;
 }
 
@@ -597,14 +630,22 @@ struct AnalysisState {
   std::size_t eventsVetoed = 0;
   std::size_t filled = 0;
   std::size_t particlesSeen = 0;
+  std::size_t particlesRejectedXF = 0;
   std::size_t malformedParticleLines = 0;
 };
 
-void analyzeParticle(const Particle& particle, const MetaDIS& meta, FrameChoice frame, AnalysisState& state) {
+void analyzeParticle(const Particle& particle, const MetaDIS& meta, const Config& cfg, AnalysisState& state) {
   ++state.particlesSeen;
 
   const int is = speciesIndex(particle.pdg);
   if (is < 0) return;
+
+  const double xf = feynmanX(particle.p, meta.P, meta.q);
+  if (!std::isfinite(xf)) return;
+  if (xf < cfg.xfMin || xf > cfg.xfMax) {
+    ++state.particlesRejectedXF;
+    return;
+  }
 
   const double Pdotq = minkowskiDot(meta.P, meta.q);
   if (!std::isfinite(Pdotq) || Pdotq == 0.0) return;
@@ -639,7 +680,7 @@ void analyzeParticle(const Particle& particle, const MetaDIS& meta, FrameChoice 
   FourVec ph = particle.p;
   FourVec q = meta.q;
   FourVec P = meta.P;
-  toFrame(frame, ph, q, P);
+  toFrame(cfg.frame, ph, q, P);
 
   const double pT2 = pT2WrtQ(ph, q);
   if (!std::isfinite(pT2) || pT2 < 0.0) return;
@@ -647,7 +688,7 @@ void analyzeParticle(const Particle& particle, const MetaDIS& meta, FrameChoice 
   ++state.filled;
 }
 
-void analyzeOscarFile(const std::string& path, const std::unordered_map<int, MetaDIS>& meta, FrameChoice frame,
+void analyzeOscarFile(const std::string& path, const std::unordered_map<int, MetaDIS>& meta, const Config& cfg,
                       AnalysisState& state) {
   std::ifstream in(path);
   if (!in) throw std::runtime_error("Cannot open OSCAR file: " + path);
@@ -693,7 +734,7 @@ void analyzeOscarFile(const std::string& path, const std::unordered_map<int, Met
       ++state.malformedParticleLines;
       continue;
     }
-    analyzeParticle(particle, *currentMeta, frame, state);
+    analyzeParticle(particle, *currentMeta, cfg, state);
   }
 }
 
@@ -783,7 +824,7 @@ int main(int argc, char** argv) {
     const std::size_t total = cfg.oscarPaths.size();
 
     for (std::size_t i = 0; i < total; ++i) {
-        analyzeOscarFile(cfg.oscarPaths[i], meta, cfg.frame, state);
+        analyzeOscarFile(cfg.oscarPaths[i], meta, cfg, state);
 
         if (i % 100 == 0 || i + 1 == total) {
             std::cerr
@@ -803,6 +844,7 @@ int main(int argc, char** argv) {
     std::cerr << "Events with metadata:   " << state.eventsWithMeta << "\n";
     std::cerr << "Events vetoed:          " << state.eventsVetoed << "\n";
     std::cerr << "Particles seen:         " << state.particlesSeen << "\n";
+    std::cerr << "Particles rejected xF:  " << state.particlesRejectedXF << "\n";
     std::cerr << "Filled entries:         " << state.filled << "\n";
     std::cerr << "Malformed lines:        " << state.malformedParticleLines << "\n";
     std::cerr << "Wrote:                  " << cfg.outPath << "\n";
