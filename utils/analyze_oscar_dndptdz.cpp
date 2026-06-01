@@ -142,6 +142,7 @@ enum class FrameChoice { LAB, TRF, BREIT };
 constexpr std::size_t NSPEC = 4;
 constexpr std::size_t NZ = 4;
 constexpr std::array<double, NZ + 1> Z_EDGES = {0.2, 0.3, 0.4, 0.6, 0.8};
+constexpr bool PRINT_PER_PARTICLE_DEBUG = false;
 
 double dot(const Vec3& a, const Vec3& b) {
   return a.x * b.x + a.y * b.y + a.z * b.z;
@@ -414,6 +415,13 @@ int speciesIndex(int pdg) {
   }
 }
 
+double minHadronMomentum(int pdg) {
+  const int absPdg = std::abs(pdg);
+  if (absPdg == 211) return 1.0;
+  if (absPdg == 321) return 2.0;
+  return 0.0;
+}
+
 const char* specTag(std::size_t i) {
   switch (i) {
     case 0: return "pip";
@@ -446,6 +454,15 @@ FrameChoice parseFrame(const std::string& frame) {
   if (frame == "TRF" || frame == "trf") return FrameChoice::TRF;
   if (frame == "BREIT" || frame == "breit") return FrameChoice::BREIT;
   throw std::runtime_error("Unknown frame '" + frame + "'. Expected LAB, TRF, or BREIT.");
+}
+
+const char* frameName(FrameChoice frame) {
+  switch (frame) {
+    case FrameChoice::LAB: return "LAB";
+    case FrameChoice::TRF: return "TRF";
+    case FrameChoice::BREIT: return "BREIT";
+  }
+  return "UNKNOWN";
 }
 
 struct Config {
@@ -634,24 +651,75 @@ struct AnalysisState {
   std::size_t malformedParticleLines = 0;
 };
 
+void printParticleDebug(const Particle& particle, const MetaDIS& meta, FrameChoice frame,
+                        double zh, double pT, const std::string& status,
+                        const std::string& reason) {
+  if (!PRINT_PER_PARTICLE_DEBUG) return;
+  if (particle.pdg != 211) return;
+  if (status != "filled") return;
+
+  std::cerr << std::setprecision(12)
+            << "[new-analyzer-debug] event=" << meta.event
+            << " pdg=" << particle.pdg
+            << " zh=" << zh
+            << " E=" << particle.p.E
+            << " px=" << particle.p.px
+            << " py=" << particle.p.py
+            << " pz=" << particle.p.pz
+            << " pT_frame=" << frameName(frame)
+            << " pT=" << pT
+            << " status=" << status
+            << " reason=\"" << reason << "\""
+            << "\n";
+}
+
 void analyzeParticle(const Particle& particle, const MetaDIS& meta, const Config& cfg, AnalysisState& state) {
   ++state.particlesSeen;
 
-  const int is = speciesIndex(particle.pdg);
-  if (is < 0) return;
-
-  const double xf = feynmanX(particle.p, meta.P, meta.q);
-  if (!std::isfinite(xf)) return;
-  if (xf < cfg.xfMin || xf > cfg.xfMax) {
-    ++state.particlesRejectedXF;
+  const double Pdotq = minkowskiDot(meta.P, meta.q);
+  if (!std::isfinite(Pdotq) || Pdotq == 0.0) {
+    printParticleDebug(particle, meta, cfg.frame, std::numeric_limits<double>::quiet_NaN(),
+                       std::numeric_limits<double>::quiet_NaN(), "cut", "invalid P.q");
     return;
   }
 
-  const double Pdotq = minkowskiDot(meta.P, meta.q);
-  if (!std::isfinite(Pdotq) || Pdotq == 0.0) return;
-
   const double zh = minkowskiDot(meta.P, particle.p) / Pdotq;
-  if (!std::isfinite(zh)) return;
+  if (!std::isfinite(zh)) {
+    printParticleDebug(particle, meta, cfg.frame, zh, std::numeric_limits<double>::quiet_NaN(),
+                       "cut", "invalid zh");
+    return;
+  }
+
+  FourVec ph = particle.p;
+  FourVec q = meta.q;
+  FourVec P = meta.P;
+  toFrame(cfg.frame, ph, q, P);
+
+  const double pT2 = pT2WrtQ(ph, q);
+  const double pT = (std::isfinite(pT2) && pT2 >= 0.0)
+                       ? std::sqrt(pT2)
+                       : std::numeric_limits<double>::quiet_NaN();
+  if (!std::isfinite(pT)) {
+    printParticleDebug(particle, meta, cfg.frame, zh, pT, "cut", "invalid pT");
+    return;
+  }
+
+  const int is = speciesIndex(particle.pdg);
+  if (is < 0) {
+    printParticleDebug(particle, meta, cfg.frame, zh, pT, "cut", "PDG not tracked");
+    return;
+  }
+
+  const double xf = feynmanX(particle.p, meta.P, meta.q);
+  if (!std::isfinite(xf)) {
+    printParticleDebug(particle, meta, cfg.frame, zh, pT, "cut", "invalid xF");
+    return;
+  }
+  if (xf < cfg.xfMin || xf > cfg.xfMax) {
+    ++state.particlesRejectedXF;
+    printParticleDebug(particle, meta, cfg.frame, zh, pT, "cut", "outside xF range");
+    return;
+  }
 
   FourVec phTRF = particle.p;
   FourVec qTRF = meta.q;
@@ -668,23 +736,28 @@ void analyzeParticle(const Particle& particle, const MetaDIS& meta, const Config
   }
 
   const int iz = zbinIndex(zh);
-  if (iz < 0) return;
+  if (iz < 0) {
+    printParticleDebug(particle, meta, cfg.frame, zh, pT, "cut", "outside zh slices");
+    return;
+  }
 
   FourVec phLab = particle.p;
-  FourVec qLab = meta.q;
-  FourVec PLab = meta.P;
-  toFrame(FrameChoice::LAB, phLab, qLab, PLab);
   const double phAbs = mag(p3(phLab));
-  if (!std::isfinite(phAbs) || phAbs < 2.0 || phAbs > 15.0) return;
+  const double phMin = minHadronMomentum(particle.pdg);
+  if (!std::isfinite(phAbs) || phAbs <= phMin || phAbs >= 15.0) {
+    printParticleDebug(particle, meta, cfg.frame, zh, pT, "cut", "outside species Ph range");
+    return;
+  }
 
-  FourVec ph = particle.p;
-  FourVec q = meta.q;
-  FourVec P = meta.P;
-  toFrame(cfg.frame, ph, q, P);
+  std::string status = "filled";
+  std::string reason = "none";
+  if (pT < cfg.ptMin || pT >= cfg.ptMax) {
+    status = "cut";
+    reason = "outside pT histogram bins";
+  }
+  printParticleDebug(particle, meta, cfg.frame, zh, pT, status, reason);
 
-  const double pT2 = pT2WrtQ(ph, q);
-  if (!std::isfinite(pT2) || pT2 < 0.0) return;
-  state.h[static_cast<std::size_t>(is)][static_cast<std::size_t>(iz)].fill(std::sqrt(pT2), 1.0);
+  state.h[static_cast<std::size_t>(is)][static_cast<std::size_t>(iz)].fill(pT, 1.0);
   ++state.filled;
 }
 
