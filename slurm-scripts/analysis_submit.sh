@@ -9,7 +9,7 @@ Usage:
 
 Examples:
   bash slurm-scripts/analysis_submit.sh 6
-  bash slurm-scripts/analysis_submit.sh my_run PT_NBINS=10
+  bash slurm-scripts/analysis_submit.sh RUN_ID=6 PT_NBINS=10 ZH_NBINS=10
 
 Options can also be supplied as environment variables:
   SLURM_CONFIG, PROJECT_ROOT, OUTPUT_HOST, RUNS_DIR, RUN_DIR, ACCOUNT, PARTITION,
@@ -32,9 +32,9 @@ if [[ -f "$SLURM_CONFIG" ]]; then
 fi
 
 # -----------------------------
-# Parse positional run name/id and key=value arguments
+# Parse positional run id and key=value arguments
 # -----------------------------
-RUN="${RUN:-${RUN_ID:-${RUN_NAME:-${NAME:-}}}}"
+RUN_ID="${RUN_ID:-}"
 
 for arg in "$@"; do
     case "$arg" in
@@ -50,14 +50,14 @@ for arg in "$@"; do
             val="${arg#*=}"
             export "$key"="$val"
             case "$key" in
-                RUN|RUN_ID|RUN_NAME|NAME)
-                    RUN="$val"
+                RUN_ID)
+                    RUN_ID="$val"
                     ;;
             esac
             ;;
         *)
-            if [[ -z "$RUN" ]]; then
-                RUN="$arg"
+            if [[ -z "$RUN_ID" ]]; then
+                RUN_ID="$arg"
             else
                 echo "Warning: ignoring extra positional argument '$arg'" >&2
             fi
@@ -65,14 +65,14 @@ for arg in "$@"; do
     esac
 done
 
-if [[ -z "$RUN" && -n "${RUN_DIR:-}" ]]; then
-    RUN="$(basename "$RUN_DIR")"
+if [[ -z "$RUN_ID" && -n "${RUN_DIR:-}" ]]; then
+    RUN_ID="$(basename "$RUN_DIR")"
 fi
 
-if [[ -z "$RUN" ]]; then
+if [[ -z "$RUN_ID" ]]; then
     usage >&2
     echo >&2
-    echo "Error: provide a run name or numeric run ID." >&2
+    echo "Error: provide a run ID." >&2
     exit 1
 fi
 
@@ -102,11 +102,11 @@ FRAME="${FRAME:-BREIT}"
 
 if [[ -n "${RUN_DIR:-}" ]]; then
     :
-elif [[ "$RUN" = /* || "$RUN" == .* || "$RUN" == */* ]]; then
-    RUN_DIR="$RUN"
+elif [[ "$RUN_ID" = /* || "$RUN_ID" == .* || "$RUN_ID" == */* ]]; then
+    RUN_DIR="$RUN_ID"
 else
-    RUN_DIR="$RUNS_DIR/$RUN"
-    LEGACY_RUN_DIR="$PROJECT_ROOT/runs/$RUN"
+    RUN_DIR="$RUNS_DIR/$RUN_ID"
+    LEGACY_RUN_DIR="$PROJECT_ROOT/runs/$RUN_ID"
     if [[ ! -d "$RUN_DIR" && -d "$LEGACY_RUN_DIR" ]]; then
         RUN_DIR="$LEGACY_RUN_DIR"
     fi
@@ -145,8 +145,8 @@ fi
 
 mkdir -p "$ANALYSIS_DIR" "$LOG_DIR"
 
-echo "Submitting OSCAR analysis:"
-echo "  run          : $RUN"
+echo "Submitting combined OSCAR analysis:"
+echo "  run id       : $RUN_ID"
 echo "  run dir      : $RUN_DIR"
 echo "  events dir   : $EVENTS_DIR"
 echo "  meta file    : $META_FILE"
@@ -197,6 +197,7 @@ if [[ "\${NFILES}" -eq 0 ]]; then
 fi
 EOF
 )
+fi
 
 # -----------------------------
 # Step 2: run analysis after indexing succeeds
