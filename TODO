@@ -27,14 +27,14 @@ TODO List
 [X] Read tau_form from input config file
 [X] Use experimental data from downloaded files
 [X] Enforce hadron forward cut for HERMES
-[ ] Implement anti-freestreaming in eHIJING to t = 0 fm
-[ ] Smear spatial positions in eHIJING
-[ ] Compare to eHIJING-examples
+[X] Implement anti-freestreaming in eHIJING to t = 0 fm
+[X] Smear spatial positions in eHIJING
+[X] Compare to eHIJING-examples
+[X] Create plotting scripts for nuclear modification factor
+[X] Subtract recoil hadrons from spectators
 [ ] Implement Rivet run outside container
 [ ] Implement Fermi momentum
 [ ] Implement Woods-Saxon sampling | import TRENTo nucleon configurations
 [ ] Enforce deterministic seed behavior in eHIJING
 [ ] Refactor modified_ff.cpp
 [ ] Feed particle list to eHIJING -> Pythia from particles.txt file
-[ ] Create plotting scripts for nuclear modification factor
-[ ] Subtract recoil hadrons from spectators
