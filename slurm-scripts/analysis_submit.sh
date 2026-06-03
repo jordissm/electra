@@ -94,12 +94,15 @@ SKIP_INDEXING="${SKIP_INDEXING:-0}"
 INDEX_MEMORY="${INDEX_MEMORY:-1G}"
 SUBRUN_LABEL="${SUBRUN_LABEL:-ehijing}"
 
-ANALYZER="${ANALYZER:-$PROJECT_ROOT/analyze_oscar_dndptdz}"
+ANALYZER="${ANALYZER:-$PROJECT_ROOT/analyze_oscar_output}"
 OSCAR_PATTERN="${OSCAR_PATTERN:-*.oscar}"
 PT_MIN="${PT_MIN:-0.0}"
 PT_MAX="${PT_MAX:-1.1}"
 PT_NBINS="${PT_NBINS:-10}"
-FRAME="${FRAME:-BREIT}"
+ZH_MIN="${ZH_MIN:-0.05}"
+ZH_MAX="${ZH_MAX:-0.95}"
+ZH_NBINS="${ZH_NBINS:-9}"
+FRAME="${FRAME:-LAB}"
 
 if [[ -n "${RUN_DIR:-}" ]]; then
     :
@@ -122,7 +125,7 @@ META_FILE="${META_FILE:-$EHIJING_DIR/DISKinematics.meta.jsonl}"
 ANALYSIS_DIR="${ANALYSIS_DIR:-$RUN_DIR/analysis}"
 LOG_DIR="${LOG_DIR:-$ANALYSIS_DIR/logs}"
 FILE_LIST="${FILE_LIST:-$ANALYSIS_DIR/particle_lists_files.txt}"
-OUT="${OUT:-$ANALYSIS_DIR/dndptdz.yoda}"
+OUT="${OUT:-$ANALYSIS_DIR/multiplicities.yoda}"
 
 if [[ ! -d "$RUN_DIR" ]]; then
     echo "Error: run directory not found: $RUN_DIR" >&2
@@ -168,7 +171,7 @@ if [[ "$SKIP_INDEXING" == "1" || "$SKIP_INDEXING" == "true" || "$SKIP_INDEXING" 
     fi
     INDEX_JOB_ID=""
 else
-INDEX_JOB_ID=$(
+    INDEX_JOB_ID=$(
 sbatch --parsable <<EOF
 #!/bin/bash
 #SBATCH -J ${JOB_NAME}:index
@@ -230,6 +233,9 @@ OUT="${OUT}"
 PT_MIN="${PT_MIN}"
 PT_MAX="${PT_MAX}"
 PT_NBINS="${PT_NBINS}"
+ZH_MIN="${ZH_MIN}"
+ZH_MAX="${ZH_MAX}"
+ZH_NBINS="${ZH_NBINS}"
 FRAME="${FRAME}"
 
 "\${ANALYZER}" \
@@ -239,13 +245,16 @@ FRAME="${FRAME}"
     --pt-min "\${PT_MIN}" \
     --pt-max "\${PT_MAX}" \
     --pt-nbins "\${PT_NBINS}" \
+    --zh-min "\${ZH_MIN}" \
+    --zh-max "\${ZH_MAX}" \
+    --zh-nbins "\${ZH_NBINS}" \
     --frame "\${FRAME}"
 EOF
 )
 
 if [[ -n "$INDEX_JOB_ID" ]]; then
-echo "Submitted index job   : ${INDEX_JOB_ID}"
-echo "Submitted analysis job: ${ANALYSIS_JOB_ID} (afterok:${INDEX_JOB_ID})"
+    echo "Submitted index job   : ${INDEX_JOB_ID}"
+    echo "Submitted analysis job: ${ANALYSIS_JOB_ID} (afterok:${INDEX_JOB_ID})"
 else
     echo "Skipped index job; using existing file list: ${FILE_LIST}"
     echo "Submitted analysis job: ${ANALYSIS_JOB_ID}"
