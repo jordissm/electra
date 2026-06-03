@@ -4,8 +4,8 @@ set -euo pipefail
 usage() {
     cat <<EOF
 Usage:
-  bash slurm-scripts/analysis_submit.sh RUN_NAME_OR_ID [key=value ...]
-  bash slurm-scripts/analysis_submit.sh RUN=RUN_NAME_OR_ID [key=value ...]
+  bash slurm-scripts/analysis_submit.sh RUN_ID [--skip-indexing] [key=value ...]
+  bash slurm-scripts/analysis_submit.sh RUN_ID=<RUN_ID> [--skip-indexing] [key=value ...]
 
 Examples:
   bash slurm-scripts/analysis_submit.sh 6
@@ -14,7 +14,10 @@ Examples:
 Options can also be supplied as environment variables:
   SLURM_CONFIG, PROJECT_ROOT, OUTPUT_HOST, RUNS_DIR, RUN_DIR, ACCOUNT, PARTITION,
   INDEX_TIME_LIMIT, ANALYSIS_TIME_LIMIT, CPUS_PER_TASK, MEMORY, ANALYZER,
-  OSCAR_PATTERN, PT_MIN, PT_MAX, PT_NBINS, FRAME, OUT
+  OSCAR_PATTERN, PT_MIN, PT_MAX, PT_NBINS, ZH_MIN, ZH_MAX, ZH_NBINS,
+  FRAME, OUT, SKIP_INDEXING, SUBRUN_LABEL
+
+Set SKIP_INDEXING=1 to reuse an existing FILE_LIST and submit only the analysis job.
 EOF
 }
 
@@ -38,6 +41,9 @@ for arg in "$@"; do
         -h|--help)
             usage
             exit 0
+            ;;
+        --skip-indexing)
+            export SKIP_INDEXING=1
             ;;
         *=*)
             key="${arg%%=*}"
@@ -84,6 +90,7 @@ INDEX_TIME_LIMIT="${INDEX_TIME_LIMIT:-00:30:00}"
 ANALYSIS_TIME_LIMIT="${ANALYSIS_TIME_LIMIT:-${DEFAULT_TIME_LIMIT:-12:00:00}}"
 CPUS_PER_TASK="${CPUS_PER_TASK:-${DEFAULT_CPUS_PER_TASK:-1}}"
 MEMORY="${MEMORY:-${DEFAULT_MEMORY:-2G}}"
+SKIP_INDEXING="${SKIP_INDEXING:-0}"
 INDEX_MEMORY="${INDEX_MEMORY:-1G}"
 
 ANALYZER="${ANALYZER:-$PROJECT_ROOT/analyze_oscar_dndptdz}"
@@ -146,10 +153,19 @@ echo "  meta file    : $META_FILE"
 echo "  file list    : $FILE_LIST"
 echo "  output       : $OUT"
 echo "  analyzer     : $ANALYZER"
+echo "  skip indexing: $SKIP_INDEXING"
 
 # -----------------------------
 # Step 1: index OSCAR files
 # -----------------------------
+if [[ "$SKIP_INDEXING" == "1" || "$SKIP_INDEXING" == "true" || "$SKIP_INDEXING" == "TRUE" ||
+      "$SKIP_INDEXING" == "yes" || "$SKIP_INDEXING" == "YES" ]]; then
+    if [[ ! -s "$FILE_LIST" ]]; then
+        echo "Error: SKIP_INDEXING=$SKIP_INDEXING but FILE_LIST is missing or empty: $FILE_LIST" >&2
+        exit 1
+    fi
+    INDEX_JOB_ID=""
+else
 INDEX_JOB_ID=$(
 sbatch --parsable <<EOF
 #!/bin/bash
@@ -185,8 +201,13 @@ EOF
 # -----------------------------
 # Step 2: run analysis after indexing succeeds
 # -----------------------------
+SBATCH_DEPENDENCY=()
+if [[ -n "$INDEX_JOB_ID" ]]; then
+    SBATCH_DEPENDENCY=(--dependency=afterok:${INDEX_JOB_ID})
+fi
+
 ANALYSIS_JOB_ID=$(
-sbatch --parsable --dependency=afterok:${INDEX_JOB_ID} <<EOF
+sbatch --parsable "${SBATCH_DEPENDENCY[@]}" <<EOF
 #!/bin/bash
 #SBATCH -J ${JOB_NAME}:run
 #SBATCH -A ${ACCOUNT}
@@ -219,5 +240,10 @@ FRAME="${FRAME}"
 EOF
 )
 
+if [[ -n "$INDEX_JOB_ID" ]]; then
 echo "Submitted index job   : ${INDEX_JOB_ID}"
 echo "Submitted analysis job: ${ANALYSIS_JOB_ID} (afterok:${INDEX_JOB_ID})"
+else
+    echo "Skipped index job; using existing file list: ${FILE_LIST}"
+    echo "Submitted analysis job: ${ANALYSIS_JOB_ID}"
+fi
