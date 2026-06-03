@@ -1,9 +1,14 @@
 //
-// Produces (1/Nevt) dN/(dpT dz_h) vs pT in fixed z_h slices for:
-//   pi+, pi-, K+, K-
+// Produces both:
+//   (1/Nevt) dN/(dpT dz_h) vs pT in fixed z_h slices, and
+//   (1/Nevt) dN/dz_h vs z_h, integrated over transverse momentum, for:
+//   pi+, pi-, pi0, K+, K-, p, pbar
+// Also produces:
+//   (1/Nevt) dN/(dQ2 dz_h) vs Q2 in fixed z_h slices, and
+//   (1/Nevt) dN/(dxB dz_h) vs xB in fixed z_h slices.
 //
 // Example:
-//   c++ -std=c++17 -O3 -march=native -Wall -Wextra -pedantic analyze_oscar_dndptdz.cpp -o analyze_oscar_dndptdz
+//   c++ -std=c++17 -O3 -march=native -Wall -Wextra -pedantic analyze_oscar_dndptdz_dndz.cpp -o analyze_oscar_dndptdz_dndz
 
 #include <algorithm>
 #include <array>
@@ -13,6 +18,7 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <iterator>
 #include <limits>
 #include <sstream>
 #include <stdexcept>
@@ -63,6 +69,7 @@ struct Hist1D {
   std::vector<double> sumwx;
   std::vector<double> sumwx2;
   std::vector<double> entries;
+  std::vector<double> edges;
   double underflow = 0.0;
   double overflow = 0.0;
   double underflow2 = 0.0;
@@ -79,7 +86,40 @@ struct Hist1D {
       : xmin(lo), xmax(hi), nbins(n), sumw(n, 0.0), sumw2(n, 0.0), sumwx(n, 0.0),
         sumwx2(n, 0.0), entries(n, 0.0) {}
 
+  explicit Hist1D(const std::vector<double>& binEdges) {
+    if (binEdges.size() < 2) {
+      throw std::runtime_error("Hist1D explicit bin edges must contain at least two values");
+    }
+    for (std::size_t i = 1; i < binEdges.size(); ++i) {
+      if (!std::isfinite(binEdges[i - 1]) || !std::isfinite(binEdges[i]) ||
+          binEdges[i] <= binEdges[i - 1]) {
+        throw std::runtime_error("Hist1D explicit bin edges must be finite and strictly increasing");
+      }
+    }
+    xmin = binEdges.front();
+    xmax = binEdges.back();
+    nbins = static_cast<int>(binEdges.size()) - 1;
+    sumw.assign(nbins, 0.0);
+    sumw2.assign(nbins, 0.0);
+    sumwx.assign(nbins, 0.0);
+    sumwx2.assign(nbins, 0.0);
+    entries.assign(nbins, 0.0);
+    edges = binEdges;
+  }
+
   double width() const { return (xmax - xmin) / nbins; }
+  double width(int ibin) const {
+    if (edges.empty()) return width();
+    return edges[static_cast<std::size_t>(ibin) + 1] - edges[static_cast<std::size_t>(ibin)];
+  }
+  double lowEdge(int ibin) const {
+    if (edges.empty()) return xmin + ibin * width();
+    return edges[static_cast<std::size_t>(ibin)];
+  }
+  double highEdge(int ibin) const {
+    if (edges.empty()) return xmin + (ibin + 1) * width();
+    return edges[static_cast<std::size_t>(ibin) + 1];
+  }
 
   void fill(double x, double w = 1.0) {
     if (!std::isfinite(x) || !std::isfinite(w)) return;
@@ -99,7 +139,13 @@ struct Hist1D {
       overflowEntries += 1.0;
       return;
     }
-    int ibin = static_cast<int>((x - xmin) / width());
+    int ibin = 0;
+    if (edges.empty()) {
+      ibin = static_cast<int>((x - xmin) / width());
+    } else {
+      const auto it = std::upper_bound(edges.begin(), edges.end(), x);
+      ibin = static_cast<int>(std::distance(edges.begin(), it)) - 1;
+    }
     ibin = std::max(0, std::min(nbins - 1, ibin));
     sumw[ibin] += w;
     sumw2[ibin] += w * w;
@@ -135,14 +181,30 @@ struct Hist1D {
       sumwx2[i] *= factor;
     }
   }
+
+  void scaleBinOnly(int ibin, double factor) {
+    const double factor2 = factor * factor;
+    sumw[ibin] *= factor;
+    sumw2[ibin] *= factor2;
+    sumwx[ibin] *= factor;
+    sumwx2[ibin] *= factor;
+  }
 };
 
 enum class FrameChoice { LAB, TRF, BREIT };
 
-constexpr std::size_t NSPEC = 4;
+constexpr std::size_t NSPEC = 7;
 constexpr std::size_t NZ = 4;
 constexpr std::array<double, NZ + 1> Z_EDGES = {0.2, 0.3, 0.4, 0.6, 0.8};
+constexpr std::size_t NQ2 = 9;
+constexpr std::array<double, NQ2 + 1> Q2_EDGES = {1.0, 1.25, 1.5, 1.75, 2.0,
+                                                   2.25, 2.5, 3.0, 5.0, 15.0};
+constexpr std::size_t NXB = 9;
+constexpr std::array<double, NXB + 1> XB_EDGES = {0.023, 0.04, 0.055, 0.075, 0.1,
+                                                  0.14, 0.2, 0.3, 0.4, 0.6};
 constexpr bool PRINT_PER_PARTICLE_DEBUG = false;
+constexpr bool APPLY_XF_CUT = false;
+constexpr bool APPLY_PID_MOMENTUM_CUT = false;
 
 double dot(const Vec3& a, const Vec3& b) {
   return a.x * b.x + a.y * b.y + a.z * b.z;
@@ -409,8 +471,11 @@ int speciesIndex(int pdg) {
   switch (pdg) {
     case 211: return 0;
     case -211: return 1;
-    case 321: return 2;
-    case -321: return 3;
+    case 111: return 2;
+    case 321: return 3;
+    case -321: return 4;
+    case 2212: return 5;
+    case -2212: return 6;
     default: return -1;
   }
 }
@@ -426,8 +491,11 @@ const char* specTag(std::size_t i) {
   switch (i) {
     case 0: return "pip";
     case 1: return "pim";
-    case 2: return "kp";
-    case 3: return "km";
+    case 2: return "pi0";
+    case 3: return "kp";
+    case 4: return "km";
+    case 5: return "p";
+    case 6: return "pbar";
     default: return "unk";
   }
 }
@@ -467,10 +535,13 @@ const char* frameName(FrameChoice frame) {
 
 struct Config {
   std::string metaPath;
-  std::string outPath = "dndptdz.yoda";
+  std::string outPath = "dndptdz_dndz.yoda";
   double ptMin = 0.0;
   double ptMax = 1.1;
   int ptNBins = 20;
+  double zhMin = 0.05;
+  double zhMax = 1.05;
+  int zhNBins = 10;
   double xfMin = 0.0;
   double xfMax = std::numeric_limits<double>::infinity();
   FrameChoice frame = FrameChoice::BREIT;
@@ -483,10 +554,13 @@ void printUsage(const char* argv0) {
       << "Usage: " << argv0 << " --meta DISKinematics.meta.jsonl [options] file1.oscar [file2.oscar ...]\n"
       << "\nOptions:\n"
       << "  --file-list PATH    Read OSCAR input paths from PATH; use '-' for stdin\n"
-      << "  --out PATH          Output YODA-like histogram file (default: dndptdz.yoda)\n"
+      << "  --out PATH          Output YODA-like histogram file (default: dndptdz_dndz.yoda)\n"
       << "  --pt-min VALUE      pT histogram minimum in GeV (default: 0.0)\n"
       << "  --pt-max VALUE      pT histogram maximum in GeV (default: 1.1)\n"
       << "  --pt-nbins N        Number of pT bins (default: 20)\n"
+      << "  --zh-min VALUE      z_h histogram minimum for dN/dz_h (default: 0.05)\n"
+      << "  --zh-max VALUE      z_h histogram maximum for dN/dz_h (default: 1.05)\n"
+      << "  --zh-nbins N        Number of z_h bins for dN/dz_h (default: 10)\n"
       << "  --xf-min VALUE      Minimum Feynman x in gamma*-target CM (default: 0.0)\n"
       << "  --xf-max VALUE      Maximum Feynman x in gamma*-target CM (default: no upper cut)\n"
       << "  --frame NAME        pT frame: LAB, TRF, or BREIT (default: BREIT)\n"
@@ -517,6 +591,12 @@ Config parseArgs(int argc, char** argv) {
       cfg.ptMax = std::stod(requireValue(arg));
     } else if (arg == "--pt-nbins") {
       cfg.ptNBins = std::stoi(requireValue(arg));
+    } else if (arg == "--zh-min") {
+      cfg.zhMin = std::stod(requireValue(arg));
+    } else if (arg == "--zh-max") {
+      cfg.zhMax = std::stod(requireValue(arg));
+    } else if (arg == "--zh-nbins") {
+      cfg.zhNBins = std::stoi(requireValue(arg));
     } else if (arg == "--xf-min") {
       cfg.xfMin = std::stod(requireValue(arg));
     } else if (arg == "--xf-max") {
@@ -541,6 +621,10 @@ Config parseArgs(int argc, char** argv) {
     throw std::runtime_error("Invalid pT axis: require finite --pt-max > --pt-min");
   }
   if (cfg.ptNBins <= 0) throw std::runtime_error("--pt-nbins must be positive");
+  if (!std::isfinite(cfg.zhMin) || !std::isfinite(cfg.zhMax) || cfg.zhMax <= cfg.zhMin) {
+    throw std::runtime_error("Invalid z_h axis: require finite --zh-max > --zh-min");
+  }
+  if (cfg.zhNBins <= 0) throw std::runtime_error("--zh-nbins must be positive");
   if (!std::isfinite(cfg.xfMin)) throw std::runtime_error("--xf-min must be finite");
   if (std::isnan(cfg.xfMax) || cfg.xfMax <= cfg.xfMin) {
     throw std::runtime_error("Invalid Feynman x cut: require --xf-max > --xf-min");
@@ -641,11 +725,17 @@ bool parseParticleLine(const std::string& line, Particle& particle) {
 
 
 struct AnalysisState {
-  std::array<std::array<Hist1D, NZ>, NSPEC> h;
+  std::array<std::array<Hist1D, NZ>, NSPEC> hPtZ;
+  std::array<std::array<Hist1D, NZ>, NSPEC> hQ2Z;
+  std::array<std::array<Hist1D, NZ>, NSPEC> hXBZ;
+  std::array<Hist1D, NSPEC> hZ;
   std::size_t eventsSeen = 0;
   std::size_t eventsWithMeta = 0;
   std::size_t eventsVetoed = 0;
-  std::size_t filled = 0;
+  std::size_t filledPtZ = 0;
+  std::size_t filledQ2Z = 0;
+  std::size_t filledXBZ = 0;
+  std::size_t filledZ = 0;
   std::size_t particlesSeen = 0;
   std::size_t particlesRejectedXF = 0;
   std::size_t malformedParticleLines = 0;
@@ -690,35 +780,26 @@ void analyzeParticle(const Particle& particle, const MetaDIS& meta, const Config
     return;
   }
 
-  FourVec ph = particle.p;
-  FourVec q = meta.q;
-  FourVec P = meta.P;
-  toFrame(cfg.frame, ph, q, P);
-
-  const double pT2 = pT2WrtQ(ph, q);
-  const double pT = (std::isfinite(pT2) && pT2 >= 0.0)
-                       ? std::sqrt(pT2)
-                       : std::numeric_limits<double>::quiet_NaN();
-  if (!std::isfinite(pT)) {
-    printParticleDebug(particle, meta, cfg.frame, zh, pT, "cut", "invalid pT");
-    return;
-  }
-
   const int is = speciesIndex(particle.pdg);
   if (is < 0) {
-    printParticleDebug(particle, meta, cfg.frame, zh, pT, "cut", "PDG not tracked");
+    printParticleDebug(particle, meta, cfg.frame, zh, std::numeric_limits<double>::quiet_NaN(),
+                       "cut", "PDG not tracked");
     return;
   }
 
-  const double xf = feynmanX(particle.p, meta.P, meta.q);
-  if (!std::isfinite(xf)) {
-    printParticleDebug(particle, meta, cfg.frame, zh, pT, "cut", "invalid xF");
-    return;
-  }
-  if (xf < cfg.xfMin || xf > cfg.xfMax) {
-    ++state.particlesRejectedXF;
-    printParticleDebug(particle, meta, cfg.frame, zh, pT, "cut", "outside xF range");
-    return;
+  if (APPLY_XF_CUT) {
+    const double xf = feynmanX(particle.p, meta.P, meta.q);
+    if (!std::isfinite(xf)) {
+      printParticleDebug(particle, meta, cfg.frame, zh, std::numeric_limits<double>::quiet_NaN(),
+                         "cut", "invalid xF");
+      return;
+    }
+    if (xf < cfg.xfMin || xf > cfg.xfMax) {
+      ++state.particlesRejectedXF;
+      printParticleDebug(particle, meta, cfg.frame, zh, std::numeric_limits<double>::quiet_NaN(),
+                         "cut", "outside xF range");
+      return;
+    }
   }
 
   FourVec phTRF = particle.p;
@@ -735,30 +816,58 @@ void analyzeParticle(const Particle& particle, const MetaDIS& meta, const Config
     }
   }
 
+  if (APPLY_PID_MOMENTUM_CUT) {
+    FourVec phLab = particle.p;
+    const double phAbs = mag(p3(phLab));
+    const double phMin = minHadronMomentum(particle.pdg);
+    if (!std::isfinite(phAbs) || phAbs <= phMin || phAbs >= 15.0) {
+      printParticleDebug(particle, meta, cfg.frame, zh, std::numeric_limits<double>::quiet_NaN(),
+                         "cut", "outside species Ph range");
+      return;
+    }
+  }
+
+  state.hZ[static_cast<std::size_t>(is)].fill(zh, 1.0);
+  ++state.filledZ;
+
   const int iz = zbinIndex(zh);
-  if (iz < 0) {
-    printParticleDebug(particle, meta, cfg.frame, zh, pT, "cut", "outside zh slices");
+  if (iz >= 0) {
+    if (std::isfinite(meta.Q2)) {
+      state.hQ2Z[static_cast<std::size_t>(is)][static_cast<std::size_t>(iz)].fill(meta.Q2, 1.0);
+      ++state.filledQ2Z;
+    }
+    if (std::isfinite(meta.xB)) {
+      state.hXBZ[static_cast<std::size_t>(is)][static_cast<std::size_t>(iz)].fill(meta.xB, 1.0);
+      ++state.filledXBZ;
+    }
+  }
+
+  FourVec ph = particle.p;
+  FourVec q = meta.q;
+  FourVec P = meta.P;
+  toFrame(cfg.frame, ph, q, P);
+
+  const double pT2 = pT2WrtQ(ph, q);
+  const double pT = (std::isfinite(pT2) && pT2 >= 0.0)
+                       ? std::sqrt(pT2)
+                       : std::numeric_limits<double>::quiet_NaN();
+  if (!std::isfinite(pT)) {
+    printParticleDebug(particle, meta, cfg.frame, zh, pT, "cut", "invalid pT");
     return;
   }
 
-  FourVec phLab = particle.p;
-  const double phAbs = mag(p3(phLab));
-  const double phMin = minHadronMomentum(particle.pdg);
-  if (!std::isfinite(phAbs) || phAbs <= phMin || phAbs >= 15.0) {
-    printParticleDebug(particle, meta, cfg.frame, zh, pT, "cut", "outside species Ph range");
-    return;
-  }
-
-  std::string status = "filled";
-  std::string reason = "none";
-  if (pT < cfg.ptMin || pT >= cfg.ptMax) {
+  std::string status = iz >= 0 ? "filled" : "cut";
+  std::string reason = iz >= 0 ? "none" : "outside fixed zh slices";
+  if (iz >= 0 && (pT < cfg.ptMin || pT >= cfg.ptMax)) {
     status = "cut";
     reason = "outside pT histogram bins";
   }
   printParticleDebug(particle, meta, cfg.frame, zh, pT, status, reason);
 
-  state.h[static_cast<std::size_t>(is)][static_cast<std::size_t>(iz)].fill(pT, 1.0);
-  ++state.filled;
+  if (iz >= 0) {
+    state.hPtZ[static_cast<std::size_t>(is)][static_cast<std::size_t>(iz)].fill(pT, 1.0);
+    ++state.filledPtZ;
+  }
 }
 
 void analyzeOscarFile(const std::string& path, const std::unordered_map<int, MetaDIS>& meta, const Config& cfg,
@@ -815,12 +924,27 @@ void finalize(AnalysisState& state) {
   const double nEvents = state.eventsWithMeta > 0 ? static_cast<double>(state.eventsWithMeta) : 1.0;
   for (std::size_t is = 0; is < NSPEC; ++is) {
     for (std::size_t iz = 0; iz < NZ; ++iz) {
-      Hist1D& h = state.h[is][iz];
+      Hist1D& h = state.hPtZ[is][iz];
       h.scale(1.0 / nEvents);
       const double dz = Z_EDGES[iz + 1] - Z_EDGES[iz];
       const double densityFactor = 1.0 / (h.width() * dz);
       h.scaleBinsOnly(densityFactor);
+
+      Hist1D& hq2 = state.hQ2Z[is][iz];
+      hq2.scale(1.0 / nEvents);
+      for (int ib = 0; ib < hq2.nbins; ++ib) {
+        hq2.scaleBinOnly(ib, 1.0 / (hq2.width(ib) * dz));
+      }
+
+      Hist1D& hxb = state.hXBZ[is][iz];
+      hxb.scale(1.0 / nEvents);
+      for (int ib = 0; ib < hxb.nbins; ++ib) {
+        hxb.scaleBinOnly(ib, 1.0 / (hxb.width(ib) * dz));
+      }
     }
+    Hist1D& hz = state.hZ[is];
+    hz.scale(1.0 / nEvents);
+    hz.scaleBinsOnly(1.0 / hz.width());
   }
 }
 
@@ -830,16 +954,17 @@ void writeHist(std::ostream& out, const Hist1D& h, const std::string& path, doub
   double totalWX = 0.0;
   double totalWX2 = 0.0;
   double totalEntries = 0.0;
+  double area = 0.0;
   for (int i = 0; i < h.nbins; ++i) {
     totalW += h.sumw[i];
     totalW2 += h.sumw2[i];
     totalWX += h.sumwx[i];
     totalWX2 += h.sumwx2[i];
     totalEntries += h.entries[i];
+    area += h.sumw[i] * h.width(i);
   }
 
   const double mean = totalW != 0.0 ? totalWX / totalW : 0.0;
-  const double area = totalW * h.width();
 
   out << "BEGIN YODA_HISTO1D_V2 " << path << "\n";
   out << "Path: " << path << "\n";
@@ -859,8 +984,8 @@ void writeHist(std::ostream& out, const Hist1D& h, const std::string& path, doub
   out << "# xlow\t xhigh\t sumw\t sumw2\t sumwx\t sumwx2\t numEntries\n";
 
   for (int i = 0; i < h.nbins; ++i) {
-    const double xlow = h.xmin + i * h.width();
-    const double xhigh = xlow + h.width();
+    const double xlow = h.lowEdge(i);
+    const double xhigh = h.highEdge(i);
     out << xlow << "\t" << xhigh << "\t" << h.sumw[i] << "\t" << h.sumw2[i] << "\t" << h.sumwx[i]
         << "\t" << h.sumwx2[i] << "\t" << h.entries[i] << "\n";
   }
@@ -874,9 +999,19 @@ void writeOutput(const std::string& path, const AnalysisState& state) {
   const double scaledBy = state.eventsWithMeta > 0 ? 1.0 / static_cast<double>(state.eventsWithMeta) : 1.0;
   for (std::size_t is = 0; is < NSPEC; ++is) {
     for (std::size_t iz = 0; iz < NZ; ++iz) {
-      const std::string histPath = std::string("/EHIJING_SMASH_DNDPTDZ/dN_dptdz_") + specTag(is) + "_" + zTag(iz);
-      writeHist(out, state.h[is][iz], histPath, scaledBy);
+      const std::string histPath = std::string("/ELECTRA_MC_2026_DNDPTDZ/dN_dptdz_") + specTag(is) + "_" + zTag(iz);
+      writeHist(out, state.hPtZ[is][iz], histPath, scaledBy);
     }
+    for (std::size_t iz = 0; iz < NZ; ++iz) {
+      const std::string histPath = std::string("/ELECTRA_MC_2026_DNDQ2DZ/dN_dQ2dz_") + specTag(is) + "_" + zTag(iz);
+      writeHist(out, state.hQ2Z[is][iz], histPath, scaledBy);
+    }
+    for (std::size_t iz = 0; iz < NZ; ++iz) {
+      const std::string histPath = std::string("/ELECTRA_MC_2026_DNDXBDZ/dN_dxbdz_") + specTag(is) + "_" + zTag(iz);
+      writeHist(out, state.hXBZ[is][iz], histPath, scaledBy);
+    }
+    const std::string histPath = std::string("/ELECTRA_MC_2026_DNDZ/dN_dz_") + specTag(is);
+    writeHist(out, state.hZ[is], histPath, scaledBy);
   }
 }
 
@@ -890,8 +1025,11 @@ int main(int argc, char** argv) {
     AnalysisState state;
     for (std::size_t is = 0; is < NSPEC; ++is) {
       for (std::size_t iz = 0; iz < NZ; ++iz) {
-        state.h[is][iz] = Hist1D(cfg.ptNBins, cfg.ptMin, cfg.ptMax);
+        state.hPtZ[is][iz] = Hist1D(cfg.ptNBins, cfg.ptMin, cfg.ptMax);
+        state.hQ2Z[is][iz] = Hist1D(std::vector<double>(Q2_EDGES.begin(), Q2_EDGES.end()));
+        state.hXBZ[is][iz] = Hist1D(std::vector<double>(XB_EDGES.begin(), XB_EDGES.end()));
       }
+      state.hZ[is] = Hist1D(cfg.zhNBins, cfg.zhMin, cfg.zhMax);
     }
 
     const std::size_t total = cfg.oscarPaths.size();
@@ -918,7 +1056,10 @@ int main(int argc, char** argv) {
     std::cerr << "Events vetoed:          " << state.eventsVetoed << "\n";
     std::cerr << "Particles seen:         " << state.particlesSeen << "\n";
     std::cerr << "Particles rejected xF:  " << state.particlesRejectedXF << "\n";
-    std::cerr << "Filled entries:         " << state.filled << "\n";
+    std::cerr << "Filled dN/dpT/dz entries: " << state.filledPtZ << "\n";
+    std::cerr << "Filled dN/dQ2/dz entries: " << state.filledQ2Z << "\n";
+    std::cerr << "Filled dN/dxB/dz entries: " << state.filledXBZ << "\n";
+    std::cerr << "Filled dN/dz entries:     " << state.filledZ << "\n";
     std::cerr << "Malformed lines:        " << state.malformedParticleLines << "\n";
     std::cerr << "Wrote:                  " << cfg.outPath << "\n";
   } catch (const std::exception& ex) {
