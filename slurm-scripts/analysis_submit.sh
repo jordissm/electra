@@ -122,9 +122,9 @@ fi
 EHIJING_DIR="$RUN_DIR/ehijing"
 EVENTS_DIR="$RUN_DIR/$SUBRUN_LABEL/events"
 META_FILE="${META_FILE:-$EHIJING_DIR/DISKinematics.meta.jsonl}"
-ANALYSIS_DIR="${ANALYSIS_DIR:-$RUN_DIR/analysis}"
+ANALYSIS_DIR="${ANALYSIS_DIR:-$RUN_DIR/$SUBRUN_LABEL/analysis}"
 LOG_DIR="${LOG_DIR:-$ANALYSIS_DIR/logs}"
-FILE_LIST="${FILE_LIST:-$ANALYSIS_DIR/particle_lists_files.txt}"
+FILE_LIST="${FILE_LIST:-$ANALYSIS_DIR/event_manifest.txt}"
 OUT="${OUT:-$ANALYSIS_DIR/multiplicities.yoda}"
 
 if [[ ! -d "$RUN_DIR" ]]; then
