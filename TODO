@@ -32,9 +32,11 @@ TODO List
 [X] Compare to eHIJING-examples
 [X] Create plotting scripts for nuclear modification factor
 [X] Subtract recoil hadrons from spectators
+[X] Fix hadron formation time reading in SMASH
 [ ] Implement Rivet run outside container
 [ ] Implement Fermi momentum
 [ ] Implement Woods-Saxon sampling | import TRENTo nucleon configurations
 [ ] Enforce deterministic seed behavior in eHIJING
 [ ] Refactor modified_ff.cpp
 [ ] Feed particle list to eHIJING -> Pythia from particles.txt file
+[ ] Create plot scripts comparing models for the nuclear modification factor
