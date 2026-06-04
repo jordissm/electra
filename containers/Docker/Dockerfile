@@ -359,6 +359,7 @@ RUN <<EOF
   # .
   # .
   # .
+  # .
   set -euxo pipefail
   mkdir -p ${PROJECT_DIR}/smash_bin
   cd ${PROJECT_DIR}

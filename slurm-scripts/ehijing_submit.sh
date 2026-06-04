@@ -50,6 +50,18 @@ OUTPUT_HOST="${OUTPUT_HOST:-$PROJECT_ROOT/output}"
 OUTPUT_CONT="${OUTPUT_CONT:-/workspace/output}"
 
 # Physical parameters for eHIJING
+# HERMES
+# d:        He4:      Ne:       Kr:       Xe:
+#   Z: 1      Z: 2      Z: 10     Z: 36     Z: 54
+#   A: 2      A: 4      A: 20     A: 84     A: 131
+# CLAS
+# d:        C:        Fe:       Pb:
+#   Z: 1      Z: 6      Z: 26     Z: 82
+#   A: 2      A: 12     A: 56     A: 208
+# EIC
+# d:        He3:      C:        Ca:       Fe:       Au:
+#   Z: 1      Z: 2      Z: 6      Z: 20     Z: 26     Z: 79
+#   A: 2      A: 3      A: 12     A: 40     A: 56     A: 197
 Z=1 #36
 A=2 #84
 MED_MODIF_MODE=0
