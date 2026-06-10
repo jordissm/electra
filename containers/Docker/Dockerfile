@@ -363,6 +363,7 @@ RUN <<EOF
   # .
   # .
   # .
+  # .
   set -euxo pipefail
   mkdir -p ${PROJECT_DIR}/smash_bin
   cd ${PROJECT_DIR}
@@ -371,7 +372,10 @@ RUN <<EOF
   cd smash/build
   set +e
   cmake -DPythia_CONFIG_EXECUTABLE=${PROJECT_DIR}/pythia8316/bin/pythia8-config \
-        -DCMAKE_INSTALL_PREFIX=${HEPMC_INSTALL} ..
+        -DCMAKE_INSTALL_PREFIX=${HEPMC_INSTALL} \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_CXX_FLAGS="-O3 -march=x86-64 -mtune=generic -std=c++17" \
+        ..
   if [[ $? -ne 0 ]]; then
     echo "Error: cmake SMASH build configuration failed!"
     exit 1
