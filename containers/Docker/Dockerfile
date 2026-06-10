@@ -40,11 +40,27 @@ FROM ubuntu:22.04 AS setup
 
 SHELL ["/bin/bash", "-c"]
 
-ARG OPTFLAGS="-O3"
-ARG ARCHFLAGS=""
-ENV CFLAGS="${OPTFLAGS} ${ARCHFLAGS}" \
-  CXXFLAGS="${OPTFLAGS} ${ARCHFLAGS} -std=c++17" \
-  CPPFLAGS="${OPTFLAGS} ${ARCHFLAGS} -std=c++17"
+ARG TARGETARCH
+
+RUN <<'EOF' > /opt/arch-flags.sh
+case "${TARGETARCH}" in
+  amd64)
+    export ARCHFLAGS="-march=x86-64 -mtune=generic"
+    # or later: -march=x86-64-v3 -mtune=znver3
+    ;;
+  arm64)
+    export ARCHFLAGS="-march=armv8-a"
+    ;;
+  *)
+    export ARCHFLAGS=""
+    ;;
+esac
+
+export OPTFLAGS="-O3"
+export CFLAGS="${OPTFLAGS} ${ARCHFLAGS}"
+export CXXFLAGS="${OPTFLAGS} ${ARCHFLAGS} -std=c++17"
+export CPPFLAGS="${OPTFLAGS} ${ARCHFLAGS} -std=c++17"
+EOF
 
 LABEL installed.software.versions="\
   ROOT ${ROOT_VERSION}\
@@ -339,7 +355,7 @@ RUN <<EOF
   wget https://pythia.org/download/pythia83/pythia8316.tgz
   tar -xf pythia8316.tgz && rm pythia8316.tgz
   cd pythia8316
-  ./configure --cxx-common='-std=c++17 -O3 -fPIC'
+  ./configure --cxx-common='${CXXFLAGS} -fPIC'
   make -j$(nproc)
 EOF
 
@@ -354,17 +370,8 @@ ARG HEPMC_INSTALL
 
 RUN <<EOF
   # Installing smash
-  # .
-  # .
-  # .
-  # .
-  # .
-  # .
-  # .
-  # .
-  # .
-  # .
   set -euxo pipefail
+  source /opt/arch-flags.sh
   mkdir -p ${PROJECT_DIR}/smash_bin
   cd ${PROJECT_DIR}
   git clone https://github.com/jordissm/smash.git
@@ -374,7 +381,7 @@ RUN <<EOF
   cmake -DPythia_CONFIG_EXECUTABLE=${PROJECT_DIR}/pythia8316/bin/pythia8-config \
         -DCMAKE_INSTALL_PREFIX=${HEPMC_INSTALL} \
         -DCMAKE_BUILD_TYPE=Release \
-        -DCMAKE_CXX_FLAGS="-O3 -march=x86-64 -mtune=generic -std=c++17" \
+        -DCMAKE_CXX_FLAGS="${CXXFLAGS}" \
         ..
   if [[ $? -ne 0 ]]; then
     echo "Error: cmake SMASH build configuration failed!"
@@ -402,20 +409,12 @@ ARG PROJECT_DIR
 
 RUN <<EOF
   # Installing ehijing
-  # .
-  # .
-  # .
-  # .
-  # .
-  # .
-  # .
-  # .
   set -euxo pipefail
   mkdir -p ${PROJECT_DIR}/ehijing_bin
   cd ${PROJECT_DIR}
   git clone https://github.com/jordissm/ehijing.git
   cd ehijing/external/pythia8
-  ./configure --cxx-common='-std=c++17 -O3 -fPIC'
+  ./configure --cxx-common='${CXXFLAGS} -fPIC'
   make -j$(nproc)
   mkdir -p ${PROJECT_DIR}/ehijing/build
   cd ${PROJECT_DIR}/ehijing/build
