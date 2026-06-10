@@ -43,16 +43,16 @@ SHELL ["/bin/bash", "-c"]
 ARG TARGETARCH
 
 RUN <<'EOF' > /opt/arch-flags.sh
-case "${TARGETARCH}" in
+case "${TARGETARCH:-}" in
   amd64)
     export ARCHFLAGS="-march=x86-64 -mtune=generic"
-    # or later: -march=x86-64-v3 -mtune=znver3
     ;;
   arm64)
     export ARCHFLAGS="-march=armv8-a"
     ;;
   *)
-    export ARCHFLAGS=""
+    echo "ERROR: unknown or empty TARGETARCH='${TARGETARCH:-}'" >&2
+    exit 1
     ;;
 esac
 
@@ -60,6 +60,9 @@ export OPTFLAGS="-O3"
 export CFLAGS="${OPTFLAGS} ${ARCHFLAGS}"
 export CXXFLAGS="${OPTFLAGS} ${ARCHFLAGS} -std=c++17"
 export CPPFLAGS="${OPTFLAGS} ${ARCHFLAGS} -std=c++17"
+
+echo "TARGETARCH=${TARGETARCH}"
+echo "CXXFLAGS=${CXXFLAGS}"
 EOF
 
 LABEL installed.software.versions="\
@@ -367,16 +370,20 @@ EOF
 FROM pythia-install AS smash-build
 ARG PROJECT_DIR
 ARG HEPMC_INSTALL
+ARG TARGETARCH
+ARG TARGETPLATFORM
 
 RUN <<EOF
   # Installing smash
   set -euxo pipefail
   source /opt/arch-flags.sh
+
   mkdir -p ${PROJECT_DIR}/smash_bin
   cd ${PROJECT_DIR}
   git clone https://github.com/jordissm/smash.git
   mkdir -p smash/build
   cd smash/build
+  
   set +e
   cmake -DPythia_CONFIG_EXECUTABLE=${PROJECT_DIR}/pythia8316/bin/pythia8-config \
         -DCMAKE_INSTALL_PREFIX=${HEPMC_INSTALL} \
