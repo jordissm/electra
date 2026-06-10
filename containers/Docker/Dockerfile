@@ -376,14 +376,30 @@ ARG TARGETPLATFORM
 RUN <<EOF
   # Installing smash
   set -euxo pipefail
-  source /opt/arch-flags.sh
+
+  case "${TARGETARCH}" in
+    amd64)
+      ARCHFLAGS="-march=x86-64 -mtune=generic"
+      ;;
+    arm64)
+      ARCHFLAGS="-march=armv8-a"
+      ;;
+    *)
+      echo "Unsupported TARGETARCH='${TARGETARCH}' TARGETPLATFORM='${TARGETPLATFORM}'"
+      exit 1
+      ;;
+  esac
+
+  CXXFLAGS="-O3 ${ARCHFLAGS} -std=c++17"
+  echo "TARGETARCH=${TARGETARCH}"
+  echo "CXXFLAGS=${CXXFLAGS}"
 
   mkdir -p ${PROJECT_DIR}/smash_bin
   cd ${PROJECT_DIR}
   git clone https://github.com/jordissm/smash.git
   mkdir -p smash/build
   cd smash/build
-  
+
   set +e
   cmake -DPythia_CONFIG_EXECUTABLE=${PROJECT_DIR}/pythia8316/bin/pythia8-config \
         -DCMAKE_INSTALL_PREFIX=${HEPMC_INSTALL} \
