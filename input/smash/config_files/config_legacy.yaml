@@ -7,6 +7,7 @@ General:
     Delta_Time:    1.0
     End_Time:      300.0
     Randomseed:    -1
+    Nevents:       1
 
 # Collision_Term:
 #     No_Collisions: true
@@ -29,3 +30,14 @@ Output:
         Analyses:
             - SMASH_2023_I2693474
             #- MC_FSPARTICLES
+
+Modi:
+    List:
+        # If the build directory is not located in the smash directory anymore,
+        # the absolute path specified below will not work anymore.
+        # You can alternatively pass the path directly from the command line
+        # with the "-c" command:
+        # ./smash -i <path to config file> -c 'Modi: { List: { File_Directory: <path to file that is read in> } }
+        File_Directory: "../input/list"
+        File_Prefix: "pdg21plus_oscar0"
+        Shift_Id: 0
