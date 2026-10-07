@@ -355,7 +355,7 @@ RUN <<EOF
   # Installing pythia
   set -euxo pipefail
   cd ${PROJECT_DIR}
-  wget https://pythia.org/download/pythia83/pythia8316.tgz
+  wget https://pythia.org/releases/pythia83/pythia8316.tgz
   tar -xf pythia8316.tgz && rm pythia8316.tgz
   cd pythia8316
   ./configure --cxx-common='${CXXFLAGS} -fPIC'
