@@ -31,6 +31,7 @@ electra.code-workspace
 # ========================
 # Build files
 electra-shell
+build/**
 
 # ========================
 modified_files/
