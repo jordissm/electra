@@ -397,6 +397,7 @@ RUN <<EOF
   mkdir -p ${PROJECT_DIR}/smash_bin
   cd ${PROJECT_DIR}
   git clone https://github.com/jordissm/smash.git
+  git -C smash log -1 --format='%H %ci %s'
   mkdir -p smash/build
   cd smash/build
 
@@ -436,6 +437,7 @@ RUN <<EOF
   mkdir -p ${PROJECT_DIR}/ehijing_bin
   cd ${PROJECT_DIR}
   git clone https://github.com/jordissm/ehijing.git
+  git -C ehijing log -1 --format='%H %ci %s'
   cd ehijing/external/pythia8
   ./configure --cxx-common='${CXXFLAGS} -fPIC'
   make -j$(nproc)
