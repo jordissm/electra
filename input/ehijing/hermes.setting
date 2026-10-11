@@ -42,6 +42,9 @@ Tune:pp = 19
 PDF:pset = 12
 PDF:useHard = on
 PDF:useHardNPDFA = on
+
+PartonVertex:setVertex = off
+
 # <<<<<< Do not change aboves without a good reason...
 
 # eHIJING Switch
