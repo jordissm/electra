@@ -41,6 +41,7 @@ POST_MEMORY="${POST_MEMORY:-${EHIJING_POST_MEMORY:-1G}}"
 
 # Find project root
 PROJECT_ROOT="${PROJECT_ROOT:-$(cd "$SCRIPT_DIR/.." && pwd)}"
+PROJECT_ROOT="$(cd "$PROJECT_ROOT" && pwd -P)"
 
 # Container image path
 IMG="${IMG:-/scratch/$USER/containers/electra.sif}"
@@ -69,6 +70,17 @@ K=4.0
 CONFIG_PATH="${CONFIG_PATH:-$PROJECT_ROOT/input/ehijing/hermes.setting}"
 HADRONIZATION_CONFIG_PATH="${HADRONIZATION_CONFIG_PATH:-$PROJECT_ROOT/input/ehijing/hadronization.setting}"
 DIS_CUTS_CONFIG_PATH="${DIS_CUTS_CONFIG_PATH:-$PROJECT_ROOT/input/ehijing/dis_cuts/hermes.setting}"
+
+for config in \
+    "$CONFIG_PATH" \
+    "$HADRONIZATION_CONFIG_PATH" \
+    "$DIS_CUTS_CONFIG_PATH"
+do
+    if [[ ! -r "$config" ]]; then
+        echo "Error: configuration is missing or unreadable: $config" >&2
+        exit 1
+    fi
+done
 
 NEVENTS="${NEVENTS:-1}"
 CHUNK_SIZE="${CHUNK_SIZE:-1000}"
@@ -197,10 +209,10 @@ CONFIG_PATH="${CONFIG_PATH}"
 HADRONIZATION_CONFIG_PATH="${HADRONIZATION_CONFIG_PATH}"
 DIS_CUTS_CONFIG_PATH="${DIS_CUTS_CONFIG_PATH}"
 
-Z="${Z}"
-A="${A}"
-MED_MODIF_MODE="${MED_MODIF_MODE}"
-K="${K}"
+Z="${Z:-1}"
+A="${A:-2}"
+MED_MODIF_MODE="${MED_MODIF_MODE:-0}"
+K="${K:-4.0}"
 NEVENTS="${NEVENTS}"
 CHUNK_SIZE="${CHUNK_SIZE}"
 
@@ -224,6 +236,7 @@ fi
 
 apptainer exec \
     --cleanenv \
+    --bind "\${PROJECT_ROOT}:\${PROJECT_ROOT}" \
     --bind "\${OUTPUT_HOST}:\${OUTPUT_CONT}" \
     --pwd /workspace \
     "\${IMG}" \
