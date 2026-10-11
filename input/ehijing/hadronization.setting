@@ -30,9 +30,10 @@ PartonVertex:modeVertex = 2
 PartonVertex:ProtonRadius = 0.85
 PartonVertex:EmissionWidth = 0.1
 Fragmentation:setVertices = on
-HadronVertex:mode = 0
+HadronVertex:mode = 2
 HadronVertex:smearOn = on
 HadronVertex:xySmear = 0.7
+HadronVertex:trace = on
 
 # Make energy-momentum conservation in PYTHIA more precise
 Check:epTolErr = 1e-6
