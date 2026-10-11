@@ -101,6 +101,8 @@ mkdir -p "$PREFIX"
 mkdir -p "$OUTPUT_DIR"
 mkdir -p "$INPUT_DIR"
 
+PROJECT_HOST="$(realpath_py "$PREFIX")"
+
 ON_CLUSTER="0"
 if command -v sbatch >/dev/null 2>&1 || command -v srun >/dev/null 2>&1 || [[ -n "${SLURM_CLUSTER_NAME:-}" || -n "${SLURM_JOB_ID:-}" ]]; then
   ON_CLUSTER="1"
@@ -189,6 +191,7 @@ SIF_PATH="$SIF_PATH"
 TMPDIR_OPT="$TMPDIR_OPT"
 OUTPUT_DIR="$OUTPUT_DIR"
 INPUT_DIR="$INPUT_DIR"
+PROJECT_HOST="$PROJECT_HOST"
 
 print_help() {
   cat <<'HLP'
@@ -287,17 +290,27 @@ fi
 SIF="\$SIF_PATH"
 [[ -z "\$SIF" ]] && SIF="docker://\$IMG_DOCKER"
 
-BIND_ARGS=( "--bind" "\$BIND_OUTPUT" )
-[[ -n "\$BIND_INPUT" ]] && BIND_ARGS+=( "--bind" "\$BIND_INPUT" )
+BIND_ARGS=(
+  "--bind" "\$PROJECT_HOST:\$PROJECT_HOST"
+  "--bind" "\$OUTPUT:\$OUTPUT"
+  "--bind" "\$BIND_OUTPUT" 
+)
+
+if [[ -n "\$INPUT" ]]; then
+  BIND_ARGS+=(
+    "--bind" "\$INPUT:\$INPUT"
+    "--bind" "\$BIND_INPUT"
+  )
+fi
 
 if [[ "\${#CMD[@]}" -eq 0 ]]; then
-  "\$ENGINE" exec "\${BIND_ARGS[@]}" "\$SIF" \
+  "\$ENGINE" exec --pwd "\$WORKDIR" "\${BIND_ARGS[@]}" "\$SIF" \
   /usr/local/bin/entrypoint.sh \
   /bin/bash --noprofile --norc -lc "cd \"\$WORKDIR\" && exec /bin/bash --noprofile --norc"
 else
   # Quote CMD safely into a shell command for bash -lc
   printf -v _cmd '%q ' "\${CMD[@]}"
-  "\$ENGINE" exec "\${BIND_ARGS[@]}" "\$SIF" \
+  "\$ENGINE" exec --pwd "\$WORKDIR""\${BIND_ARGS[@]}" "\$SIF" \
   /usr/local/bin/entrypoint.sh \
   /bin/bash --noprofile --norc -lc "cd \"\$WORKDIR\" && exec \$_cmd"
 fi
