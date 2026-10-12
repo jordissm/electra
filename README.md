@@ -84,12 +84,18 @@ Plot one trace with Python 3.10+ and matplotlib:
 python3 utils/plot_fragmentation.py /path/to/event_00000000.fragmentation
 ```
 
-This saves `event_00000000.pdf` with a time-versus-z overview, diagrams for each
-string/pass and hadron time tables. Options include `--axis x`, `--axis y`,
-`--string 0 --pass 1`, `--no-labels`, `--overview-only`, and `-o output.pdf`.
+This saves `event_00000000.pdf` with saved vertices and outgoing hadron worldlines,
+diagrams for each string/pass, longitudinal Lund constituent pages for v3
+records, and hadron time tables. Breakups are solid green circles, formations
+solid purple circles, and the primary vertex a yellow star. Options include
+`--axis x`, `--axis y`, `--string 0 --pass 1`, `--frame string-rest`,
+`--duration 5`, `--no-labels`, `--overview-only`, and `-o output.pdf`.
 The container includes the utility at `/opt/electra/share/utils/plot_fragmentation.py`.
-Plots use vertices before OSCAR freestreaming/smearing; connecting lines are
-geometric guides rather than particle worldlines.
+Hadron worldlines use `dx/dt = p/E` from saved formation points before OSCAR
+smearing. Separate constituent pages use the longitudinal massless-reference
+string picture, excluding transverse tunnelling/smearing and heavy-endpoint
+corrections; their formation points can differ from the saved vertices.
+Regenerate old v2 traces after rebuilding eHIJING/PYTHIA for constituent paths.
 
 ## Citation
 
