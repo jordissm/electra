@@ -59,6 +59,34 @@ curl -fsSL https://raw.githubusercontent.com/jordissm/electra/main/install.sh -o
 
 ## Usage
 
+### Hadronization spacetime diagrams
+
+Enable the following in the eHIJING hadronization configuration:
+
+```text
+HadronVertex:trace = on
+Fragmentation:setVertices = on
+HadronVertex:mode = 2
+```
+
+Each `event_XXXXXXXX.oscar` then gets a matching `event_XXXXXXXX.fragmentation`
+file with string membership, partons, breakup vertices, saved formation points,
+production times and the final particle record. Both files share the event's
+shard directory. Rebuild eHIJING/PYTHIA and the container to use this feature.
+
+Plot one trace with Python 3.10+ and matplotlib:
+
+```bash
+python3 utils/plot_fragmentation.py /path/to/event_00000000.fragmentation
+```
+
+This saves `event_00000000.pdf` with a time-versus-z overview, diagrams for each
+string/pass and hadron time tables. Options include `--axis x`, `--axis y`,
+`--string 0 --pass 1`, `--no-labels`, `--overview-only`, and `-o output.pdf`.
+The container includes the utility at `/opt/electra/share/utils/plot_fragmentation.py`.
+Plots use vertices before OSCAR freestreaming/smearing; connecting lines are
+geometric guides rather than particle worldlines.
+
 ## Citation
 
 If you use ELECTRA in your research, please cite:
