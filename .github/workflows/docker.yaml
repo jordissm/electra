@@ -107,10 +107,10 @@ jobs:
       - name: Create multi-arch manifest
         run: |
           docker buildx imagetools create \
-            -t $IMAGE_NAME:latest \
-            -t "$IMAGE_NAME:sha-${{ github.sha }}" \  
-            $IMAGE_NAME:amd64 \
-            $IMAGE_NAME:arm64
+          -t "${IMAGE_NAME}:latest" \
+          -t "${IMAGE_NAME}:sha-${{ github.sha }}" \
+          "${IMAGE_NAME}:amd64" \
+          "${IMAGE_NAME}:arm64"
 
       - name: Inspect multi-arch manifest
         run: |
