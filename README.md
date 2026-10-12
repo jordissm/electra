@@ -59,6 +59,10 @@ curl -fsSL https://raw.githubusercontent.com/jordissm/electra/main/install.sh -o
 
 ## Usage
 
+The installer copies packaged utilities into `<prefix>/utils` on both local and
+cluster installs. Use `--utils <dir>` to choose another directory. Re-running
+the installer adds missing files and preserves existing utility files.
+
 ### Hadronization spacetime diagrams
 
 Enable the following in the eHIJING hadronization configuration:

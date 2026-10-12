@@ -17,6 +17,7 @@ TMPDIR_OPT="${TMPDIR:-/tmp}"
 OUTPUT_DIR="$OUTPUT_DEFAULT"
 INPUT_DIR="$INPUT_DEFAULT"
 SLURM_SCRIPTS_DIR="$SLURM_SCRIPTS_DEFAULT"
+UTILS_DIR=""
 
 SIF_DIR_DEFAULT="${SIF_DIR_DEFAULT:-/scratch/$USER/containers}"
 SIF_NAME_DEFAULT="electra.sif"
@@ -37,6 +38,7 @@ OPTIONS:
   -t, --tmpdir <dir>        TMPDIR for apptainer/singularity (default: $TMPDIR_OPT)
       --output <dir>        Default host output directory (default: $OUTPUT_DEFAULT)
       --input <dir>         Default host input directory (optional)
+      --utils <dir>         Utility install directory (default: <prefix>/utils)
   (workdir is set at runtime via electra-shell --workdir; default /workspace)
   --pull-sif              Pull/build a local SIF file at install time (apptainer only)
   --sif-dir <dir>         Directory to store the SIF (default: /scratch/$USER/containers)
@@ -45,6 +47,7 @@ OPTIONS:
 
 What it creates:
   <prefix>/electra-shell
+  <prefix>/utils/ (or --utils directory; existing utility files are preserved)
 
 Typical usage:
   ./install.sh
@@ -88,6 +91,7 @@ while [[ $# -gt 0 ]]; do
     -t|--tmpdir) TMPDIR_OPT="$2"; shift 2;;
     --output)    OUTPUT_DIR="$(realpath_py "$2")"; shift 2;;
     --input)     INPUT_DIR="$(realpath_py "$2")"; shift 2;;
+    --utils)     UTILS_DIR="$(realpath_py "$2")"; shift 2;;
     --slurm-scripts) SLURM_SCRIPTS_DIR="$(realpath_py "$2")"; shift 2;;
     --pull-sif)  PULL_SIF="1"; shift 1;;
     --sif-dir)   SIF_DIR="$(realpath_py "$2")"; shift 2;;
@@ -97,9 +101,14 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+if [[ -z "$UTILS_DIR" ]]; then
+  UTILS_DIR="$PREFIX/utils"
+fi
+
 mkdir -p "$PREFIX"
 mkdir -p "$OUTPUT_DIR"
 mkdir -p "$INPUT_DIR"
+mkdir -p "$UTILS_DIR"
 
 PROJECT_HOST="$(realpath_py "$PREFIX")"
 
@@ -168,6 +177,25 @@ if [[ -z "$(find "$INPUT_DIR" -mindepth 1 -maxdepth 1 -print -quit 2>/dev/null)"
   fi
 else
   echo "Input dir is not empty, not copying defaults: $INPUT_DIR"
+fi
+
+# Install missing utilities on every run, preserving existing host files.
+if [[ -n "$SIF_PATH" && -s "$SIF_PATH" ]] && command -v apptainer >/dev/null 2>&1; then
+  echo "Copying missing utility files from SIF into: $UTILS_DIR"
+  apptainer exec --bind "$UTILS_DIR:/workspace/utils/" "$SIF_PATH" /bin/bash -c \
+    'if [[ -d /opt/electra/share/utils ]]; then cp -an /opt/electra/share/utils/. /workspace/utils/; else echo "WARNING: packaged utilities are unavailable in this image." >&2; fi'
+elif [[ -n "$SIF_PATH" && -s "$SIF_PATH" ]] && command -v singularity >/dev/null 2>&1; then
+  echo "Copying missing utility files from SIF into: $UTILS_DIR"
+  singularity exec --bind "$UTILS_DIR:/workspace/utils/" "$SIF_PATH" /bin/bash -c \
+    'if [[ -d /opt/electra/share/utils ]]; then cp -an /opt/electra/share/utils/. /workspace/utils/; else echo "WARNING: packaged utilities are unavailable in this image." >&2; fi'
+elif command -v docker >/dev/null 2>&1; then
+  echo "Copying missing utility files from Docker image into: $UTILS_DIR"
+  docker run --rm \
+    -v "$UTILS_DIR:/workspace/utils/" \
+    "$IMG_DOCKER" \
+    /bin/bash -c 'if [[ -d /opt/electra/share/utils ]]; then cp -an /opt/electra/share/utils/. /workspace/utils/; else echo "WARNING: packaged utilities are unavailable in this image." >&2; fi'
+else
+  echo "WARNING: could not copy utility files; no SIF or Docker source available."
 fi
 
 if [[ "$ON_CLUSTER" == "1" ]]; then
@@ -332,4 +360,5 @@ echo "Environment setup successful."
 echo "Launcher created at: $PREFIX/electra-shell"
 echo "Default output dir: $OUTPUT_DIR"
 echo "Default input dir:  $INPUT_DIR"
+echo "Utility directory:  $UTILS_DIR"
 echo "Run: $PREFIX/electra-shell -- electra --help"
