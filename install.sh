@@ -139,6 +139,16 @@ if [[ "$PULL_SIF" == "1" ]]; then
 
   echo "SIF ready:"
   ls -lh "$SIF_PATH"
+  python3 - "$SIF_PATH" <<'PY'
+import hashlib
+import sys
+
+digest = hashlib.sha256()
+with open(sys.argv[1], "rb") as package:
+    for chunk in iter(lambda: package.read(1024 * 1024), b""):
+        digest.update(chunk)
+print(f"SIF SHA256: {digest.hexdigest()}")
+PY
 fi
 
 # Populate host input dir with packaged defaults only if empty
