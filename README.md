@@ -95,9 +95,9 @@ recorded momentum is timelike. The container includes the script at
 including `--overview-only`. Bold solid lines show original endpoint boundaries,
 thin lines show breakup constituents, and verified reference string area is
 shaded. Filled green/purple circles show stored pair-creation/formation vertices;
-green triangles `T` mark boundary turns, not string breaks. Hollow `RB`/`RF`
-circles show converted reference breakups/meetings; `RT` triangles show
-reference turns. The primary
+boundary turns remain as bends in the curves without separate markers or
+labels. Hollow `RB`/`RF` circles show converted reference breakups/meetings.
+The primary
 vertex is a yellow star. Reference and saved formation points can differ because
 Pythia's late prescription uses the full hadron momentum, including transverse
 fragmentation momentum even when vertex smearing is off.
@@ -116,8 +116,8 @@ dedicated rest-frame pages. The diamond uses dash-dot boundaries; the input
 curves are dotted. The final
 hadron momentum after recoil exchange and recorded origin define a massless
 model closing at the assigned late point `F = O + p_h/kappa`. Its axis follows
-the positive input endpoint direction in the final hadron rest frame. `CT`
-triangles mark model turns, not sampled pair-creation vertices. This is an
+the positive input endpoint direction in the final hadron rest frame. Model
+turns are retained in the curves without markers or labels. This is an
 effective post-collapse picture, not the massive pre-collapse recoil history.
 It is used when the stored assignment satisfies that late formula (unsmeared
 light-flavour mode 2); otherwise the available input endpoint model is retained.
@@ -132,8 +132,8 @@ not fitted to the formation point. For this model, gluon kinks and junctions
 are unsupported. The equation of motion is
 [Eq. (17) of Ferreres-Sole and Sjostrand](https://arxiv.org/html/1808.04619v2#S2.SS2.SSS5).
 
-The hollow diamonds mark recorded input constituent starting vertices. A curve's
-turn or a diamond's `CT` does not create a constituent. The effective diamond's
+The hollow diamonds mark recorded input constituent starting vertices. A turning
+point on either model's boundary does not create a constituent. The effective diamond's
 common origin is an inherited model anchor; the purple point is the assigned
 **hadron** formation. The two models do not record the intervening recoil history.
 

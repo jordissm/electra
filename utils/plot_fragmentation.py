@@ -903,16 +903,13 @@ def draw_diagram(trace, hadrons, axis, labels, title, colors, plt, Line2D,
         for curve in curves:
             color = colors[group]
             line(curve.path, color, linestyle=":", width=1.5)
-            start, turn = position(curve.path[0]), position(curve.turn)
+            start = position(curve.path[0])
             ax.plot(start[component], start[0], "D", color=color,
                     markerfacecolor="none", markersize=5, zorder=4)
-            ax.plot(turn[component], turn[0], "^", color=color,
-                    markerfacecolor=color, markersize=5, zorder=4)
             if labels:
                 ax.annotate(f"P{curve.parton.index}", (start[component], start[0]), xytext=(4, -12),
                             textcoords="offset points", fontsize=7, color=color)
     seen_breakups = set()
-    seen_turns = False
     if show_lund and not longitudinal:
         for hadron, first, second, formation, momentum, paths in reference_data:
             color = colors[hadron.group]
@@ -936,15 +933,15 @@ def draw_diagram(trace, hadrons, axis, labels, title, colors, plt, Line2D,
             if key not in seen_breakups:
                 vertex = position(breakup)
                 index = hadron.break_indices[side] if hadron.break_indices is not None else None
-                turn = boundary_turn(trace, hadron, index)
-                seen_turns = seen_turns or turn
-                ax.plot(vertex[component], vertex[0], "^" if turn else "o", color="green",
+                if boundary_turn(trace, hadron, index):
+                    continue
+                ax.plot(vertex[component], vertex[0], "o", color="green",
                         markerfacecolor="green", markersize=6, alpha=alpha, zorder=5)
                 if labels and hadron.break_indices is not None:
                     index = hadron.break_indices[side]
                     plane = trace.planes.get((hadron.group, hadron.branch))
                     mark = "!" if show_lund and plane is not None and index in plane.invalid else ""
-                    ax.annotate(f"{'T' if turn else 'B'}{index}{mark}",
+                    ax.annotate(f"B{index}{mark}",
                                 (vertex[component], vertex[0]), xytext=(-5, -10),
                                 textcoords="offset points", fontsize=7, color="green")
                 seen_breakups.add(key)
@@ -984,14 +981,8 @@ def draw_diagram(trace, hadrons, axis, labels, title, colors, plt, Line2D,
                         textcoords="offset points", fontsize=8, color=color)
     for model in collapses:
         color = colors[model.hadron.group]
-        for side, path in enumerate(model.paths):
+        for path in model.paths:
             line(path, color, linestyle="-.", width=2.3)
-            turn = position(model.turns[side])
-            ax.plot(turn[component], turn[0], "^", color=color, markersize=6, zorder=5)
-            if labels:
-                ax.annotate(f"CT{model.hadron.index}{'+' if side == 0 else '-'}",
-                            (turn[component], turn[0]), xytext=(4, 4),
-                            textcoords="offset points", fontsize=7, color=color)
         start = position(model.origin)
         ax.plot(start[component], start[0], "o", color=color,
                 markerfacecolor="white", markersize=5, zorder=5)
@@ -1010,13 +1001,13 @@ def draw_diagram(trace, hadrons, axis, labels, title, colors, plt, Line2D,
                 if key in seen_breakups:
                     continue
                 vertex = position(breakup)
-                turn = boundary_turn(trace, seed, index)
-                seen_turns = seen_turns or turn
-                ax.plot(vertex[component], vertex[0], "^" if turn else "o", color="green",
+                if boundary_turn(trace, seed, index):
+                    continue
+                ax.plot(vertex[component], vertex[0], "o", color="green",
                         markerfacecolor="green" if longitudinal else "none",
                         markersize=6 if longitudinal else 8, zorder=5)
                 if labels:
-                    label = ("T" if turn else "B") + str(index)
+                    label = "B" + str(index)
                     if not longitudinal:
                         label = "R" + label
                     if index in plane.invalid:
@@ -1052,8 +1043,6 @@ def draw_diagram(trace, hadrons, axis, labels, title, colors, plt, Line2D,
     ]
     if seen_planes or any(row[1] is not None or row[2] is not None for row in data):
         handles.insert(0, Line2D([], [], color="green", marker="o", linestyle="none", label="Breakup (pair creation)"))
-    if seen_turns:
-        handles.insert(1, Line2D([], [], color="green", marker="^", linestyle="none", label="T: boundary turn (no breakup)"))
     if show_lund and seen_planes and (boundaries or reference_data or area):
         from matplotlib.patches import Patch
         handles.extend([
@@ -1072,7 +1061,6 @@ def draw_diagram(trace, hadrons, axis, labels, title, colors, plt, Line2D,
         handles.extend([
             Line2D([], [], color="black", linestyle=":", linewidth=1.5, label="Massive input endpoint (model)"),
             Line2D([], [], color="black", marker="D", markerfacecolor="none", linestyle="none", label="Input constituent start (recorded)"),
-            Line2D([], [], color="black", marker="^", linestyle="none", label="Endpoint turn (model)"),
         ])
         if len(groups) == 1:
             for curve in models[groups[0]]:
@@ -1082,7 +1070,6 @@ def draw_diagram(trace, hadrons, axis, labels, title, colors, plt, Line2D,
     if collapses:
         handles.extend([
             Line2D([], [], color="black", linestyle="-.", linewidth=2.3, label="Collapse Lund diamond (effective)"),
-            Line2D([], [], color="black", marker="^", linestyle="none", label="CT: model turn, not a breakup"),
         ])
         if not seen_planes:
             from matplotlib.patches import Patch
@@ -1100,8 +1087,7 @@ def draw_diagram(trace, hadrons, axis, labels, title, colors, plt, Line2D,
                      else "input-string-rest" if frame == "string-rest" and not longitudinal else frame)
     ax.set_title(title + f"\nEvent {trace.event}, attempt {trace.attempt}, mode {trace.mode}; frame: {display_frame}")
     notes = "P/H = PYTHIA parton/hadron index; ID = OSCAR output_ID. Faded points: not exported.\n"
-    if seen_turns:
-        notes += "Green circles B/RB create pairs; triangles T/RT are geometric turns. New ordinary end production assignments use the origin.\n"
+    notes += "Green circles B/RB create pairs. Turns remain as bends in the curves, without separate markers or labels.\n"
     if longitudinal:
         if seen_planes:
             notes += "Lund massless-reference picture: bold original endpoints; thin breakup constituents; verified string area is shaded.\n"
@@ -1135,7 +1121,7 @@ def draw_diagram(trace, hadrons, axis, labels, title, colors, plt, Line2D,
     if collapses:
         notes += "\nCollapse diamond: final p_h and assigned origin define an effective massless string closing at saved F=O+p_h/kappa."
         notes += "\nIts axis follows the positive input endpoint in the final hadron rest frame; it is not a pre-collapse recoil history."
-        notes += "\nThe diamond origin is an effective common start, not a measured constituent birth; CT marks reversal, purple F hadron formation."
+        notes += "\nThe diamond origin is an effective common start, not a measured constituent birth; purple F marks hadron formation."
         if len(collapses) == 1 and len(groups) == 1:
             mass = math.sqrt(dot(collapses[0].hadron.momentum, collapses[0].hadron.momentum))
             notes += f"\nEffective final mass: {mass:.6g} GeV; proper extent m_h/kappa = {mass / trace.kappa:.6g} fm/c."
@@ -1167,9 +1153,8 @@ def draw_diagram(trace, hadrons, axis, labels, title, colors, plt, Line2D,
                 values = [position(v) for v in curve.path]
                 detail.plot([v[component] for v in values], [v[0] for v in values],
                             color=color, linestyle=":", linewidth=1.5)
-                start, turn = position(curve.path[0]), position(curve.turn)
+                start = position(curve.path[0])
                 detail.plot(start[component], start[0], "D", color=color, markerfacecolor="none", markersize=4)
-                detail.plot(turn[component], turn[0], "^", color=color, markersize=4)
                 if labels:
                     detail.annotate(f"P{curve.parton.index}", (start[component], start[0]), xytext=(4, -10),
                                     textcoords="offset points", fontsize=7, color=color)
