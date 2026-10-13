@@ -167,7 +167,7 @@ def main():
         ):
             if mode == "initial" or mode == "final":
                 color = "blue"
-            elif mode == "interaction":
+            elif mode in ("interaction_in", "interaction_out", "interaction_unknown"):
                 color = "red"
             else:
                 color = "black"
@@ -185,7 +185,7 @@ def main():
 
             if mode == "final":
                 color = "blue"
-            elif mode == "interaction":
+            elif mode in ("interaction_in", "interaction_out", "interaction_unknown"):
                 color = "red"
             else:
                 color = "black"
