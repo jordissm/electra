@@ -43,6 +43,7 @@ test/
 # ========================
 # Development documentation
 docs/
+AGENTS.md
 
 # ========================
 # Analysis output
