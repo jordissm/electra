@@ -150,6 +150,12 @@ def main() -> int:
     ap = argparse.ArgumentParser(prog="shard_profiles.py")
     ap.add_argument("--in-dir", required=True, type=Path, help="Flat input directory with profile files")
     ap.add_argument("--out-root", required=True, type=Path, help="Output root directory for sharded files")
+    ap.add_argument(
+        "--out-index",
+        type=Path,
+        default=Path("profiles.jsonl"),
+        help="JSONL index path (relative paths are under --out-root; default: profiles.jsonl)",
+    )
     ap.add_argument("--pattern", default="*.dat", help="Glob pattern in --in-dir (default: *.dat)")
     ap.add_argument(
         "--mode",
@@ -201,7 +207,9 @@ def main() -> int:
 
     in_dir: Path = args.in_dir.resolve()
     out_root: Path = args.out_root.resolve()
-    out_index: Path = out_root / "profiles.jsonl"
+    out_index: Path = args.out_index
+    if not out_index.is_absolute():
+        out_index = out_root / out_index
 
     if in_dir == out_root:
         print(
@@ -236,12 +244,33 @@ def main() -> int:
     n_skipped = 0
 
     index_lines = []
+    seen_profile_ids: dict[str, str] = {}
 
     for src in files:
         sha = compute_sha256(src)
         shard = sha[: args.shard_len]
 
         prof_id = pick_profile_id(src, args.id_mode, sha)
+        if prof_id in seen_profile_ids:
+            if seen_profile_ids[prof_id] == sha:
+                # Identical content with the same ID is one profile, even if
+                # the source files have different extensions.
+                n_skipped += 1
+                continue
+            if args.collision == "skip":
+                n_skipped += 1
+                continue
+            if args.collision == "rename":
+                base_id = prof_id
+                suffix = 1
+                while f"{base_id}_{suffix}" in seen_profile_ids:
+                    suffix += 1
+                prof_id = f"{base_id}_{suffix}"
+            else:
+                raise FileExistsError(
+                    f"Duplicate profile ID '{prof_id}' has different content; "
+                    "use --collision rename or a different --id-mode."
+                )
         ext = normalize_ext(src, keep_ext=args.keep_ext, forced_ext=args.ext)
 
         # Output filename: if id-mode=name, keep the full name; else id + ext
@@ -273,6 +302,7 @@ def main() -> int:
         if args.dry_run:
             print(f"[DRY] {src} -> {dst2} ({args.mode})")
             index_lines.append(json.dumps(rec))
+            seen_profile_ids[prof_id] = sha
             n_written += 1
             continue
 
@@ -291,6 +321,7 @@ def main() -> int:
                 ) from e
 
         index_lines.append(json.dumps(rec))
+        seen_profile_ids[prof_id] = sha
         n_written += 1
 
     if args.dry_run:
@@ -299,6 +330,7 @@ def main() -> int:
         return 0
 
     # Atomic write index
+    safe_mkdir(out_index.parent)
     tmp_index.write_text("\n".join(index_lines) + ("\n" if index_lines else ""))
     tmp_index.replace(out_index)
 
