@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Plot an eHIJING event_XXXXXXXX.fragmentation trace as a multipage PDF.
 
-Requires matplotlib. Reads v2/v3/v4/v5 traces. Version 4 records converted
+Requires matplotlib. Reads v2/v3/v4 traces. Version 4 records converted
 reference breakup points before heavy offsets and smearing. Reference paths
 are validated against a continuous regional directrix and use inherited origins.
 Unsupported classical paths/areas are omitted, not interpolated.
@@ -54,10 +54,11 @@ class Hadron:
     final_first: Vertex | None = None
     final_second: Vertex | None = None
     break_indices: tuple[int, int] | None = None
-    color_connection_time: float | None = None
-    color_connection_status: str = "unavailable_no_history"
-    color_connection_first_time: float | None = None
-    color_connection_first_status: str = "unavailable_no_history"
+    production_first: Vertex | None = None
+    production_second: Vertex | None = None
+    final_production_first: Vertex | None = None
+    final_production_second: Vertex | None = None
+    production_basis: str = "legacy_breakup_pair"
 
 
 @dataclass
@@ -271,7 +272,7 @@ def read_trace(path: Path) -> Trace:
     with path.open(encoding="utf-8") as source:
         for raw in source:
             line = raw.strip()
-            if line in tuple(f"# eHIJING fragmentation trace v{i}" for i in (2, 3, 4, 5)):
+            if line in tuple(f"# eHIJING fragmentation trace v{i}" for i in (2, 3, 4)):
                 version = int(line[-1])
             elif line.startswith("Event:"):
                 match = re.fullmatch(r"Event:\s+(-?\d+)\s+Attempt:\s+(\d+)", line)
@@ -339,7 +340,7 @@ def read_trace(path: Path) -> Trace:
                 if "ancestor_strings=" in line:
                     current["ancestry"] = line
     if not version or event is None or attempt is None or mode is None:
-        raise ValueError("Expected an eHIJING fragmentation trace v2-v5 with event/settings headers")
+        raise ValueError("Expected an eHIJING fragmentation trace v2, v3 or v4 with event/settings headers")
     if not ended or not success:
         raise ValueError("The trace is incomplete or does not describe a successful event")
 
@@ -359,10 +360,9 @@ def read_trace(path: Path) -> Trace:
             second=point(values.get("absolute_breakup_second")),
             origin=point(values.get("inherited_origin")),
             prod_time=time(values.get("stored_prod_time")),
-            color_connection_time=time(values.get("color_connection_time")),
-            color_connection_status=values.get("color_connection_status", "unavailable_no_history"),
-            color_connection_first_time=time(values.get("color_connection_first_time")),
-            color_connection_first_status=values.get("color_connection_first_status", "unavailable_no_history"),
+            production_first=point(values.get("production_reference_first")),
+            production_second=point(values.get("production_reference_second")),
+            production_basis=values.get("production_basis", "legacy_breakup_pair"),
             momentum=point(values.get("momentum")),
             break_indices=tuple(int(item.lstrip("B")) for item in values["breaks"].split(","))
                 if "breaks" in values else None,
@@ -409,6 +409,8 @@ def read_trace(path: Path) -> Trace:
         hadron.final_momentum = point(values.get("momentum"))
         hadron.final_first = point(values.get("stored_breakup_first"))
         hadron.final_second = point(values.get("stored_breakup_second"))
+        hadron.final_production_first = point(values.get("stored_production_first"))
+        hadron.final_production_second = point(values.get("stored_production_second"))
         hadron.prod_time = time(values.get("prod_time"))
     if not trace.hadrons:
         raise ValueError("No hadron vertices found in the trace")
@@ -729,6 +731,13 @@ def place_labels(fig, ax, reserved=()):
         occupied.append(label.get_window_extent(renderer).expanded(1.05, 1.15))
 
 
+def boundary_turn(trace, hadron, index):
+    """Identify geometry boundary points without calling them pair creations."""
+    plane = trace.planes.get((hadron.group, hadron.branch))
+    return (trace.strings.get(hadron.group, {}).get("topology") != "closed"
+            and plane is not None and plane.break_roles.get(index) == "boundary")
+
+
 def rest_frame_beta(trace, group, total=None):
     """Validate the recorded momentum before requesting a string CM view."""
     if total is None:
@@ -903,6 +912,7 @@ def draw_diagram(trace, hadrons, axis, labels, title, colors, plt, Line2D,
                 ax.annotate(f"P{curve.parton.index}", (start[component], start[0]), xytext=(4, -12),
                             textcoords="offset points", fontsize=7, color=color)
     seen_breakups = set()
+    seen_turns = False
     if show_lund and not longitudinal:
         for hadron, first, second, formation, momentum, paths in reference_data:
             color = colors[hadron.group]
@@ -925,13 +935,16 @@ def draw_diagram(trace, hadrons, axis, labels, title, colors, plt, Line2D,
             key = (hadron.group, breakup)
             if key not in seen_breakups:
                 vertex = position(breakup)
-                ax.plot(vertex[component], vertex[0], "o", color="green",
+                index = hadron.break_indices[side] if hadron.break_indices is not None else None
+                turn = boundary_turn(trace, hadron, index)
+                seen_turns = seen_turns or turn
+                ax.plot(vertex[component], vertex[0], "^" if turn else "o", color="green",
                         markerfacecolor="green", markersize=6, alpha=alpha, zorder=5)
                 if labels and hadron.break_indices is not None:
                     index = hadron.break_indices[side]
                     plane = trace.planes.get((hadron.group, hadron.branch))
                     mark = "!" if show_lund and plane is not None and index in plane.invalid else ""
-                    ax.annotate(f"B{index}{mark}",
+                    ax.annotate(f"{'T' if turn else 'B'}{index}{mark}",
                                 (vertex[component], vertex[0]), xytext=(-5, -10),
                                 textcoords="offset points", fontsize=7, color="green")
                 seen_breakups.add(key)
@@ -983,7 +996,8 @@ def draw_diagram(trace, hadrons, axis, labels, title, colors, plt, Line2D,
         ax.plot(start[component], start[0], "o", color=color,
                 markerfacecolor="white", markersize=5, zorder=5)
         if labels:
-            ax.annotate("collapse origin", (start[component], start[0]), xytext=(4, -12),
+            origin_label = "collapse origin / production" if model.hadron.production_basis == "collapse_origin" else "collapse origin"
+            ax.annotate(origin_label, (start[component], start[0]), xytext=(4, -12),
                         textcoords="offset points", fontsize=7, color=color)
     if show_lund:
         for group, leg in seen_planes:
@@ -996,11 +1010,15 @@ def draw_diagram(trace, hadrons, axis, labels, title, colors, plt, Line2D,
                 if key in seen_breakups:
                     continue
                 vertex = position(breakup)
-                ax.plot(vertex[component], vertex[0], "o", color="green",
+                turn = boundary_turn(trace, seed, index)
+                seen_turns = seen_turns or turn
+                ax.plot(vertex[component], vertex[0], "^" if turn else "o", color="green",
                         markerfacecolor="green" if longitudinal else "none",
                         markersize=6 if longitudinal else 8, zorder=5)
                 if labels:
-                    label = f"B{index}" if longitudinal else f"RB{index}"
+                    label = ("T" if turn else "B") + str(index)
+                    if not longitudinal:
+                        label = "R" + label
                     if index in plane.invalid:
                         label += "!"
                     ax.annotate(label, (vertex[component], vertex[0]), xytext=(-5, -10),
@@ -1010,7 +1028,11 @@ def draw_diagram(trace, hadrons, axis, labels, title, colors, plt, Line2D,
             ax.plot(vertex[component], vertex[0], "o", color=colors[group],
                     markerfacecolor="white", markersize=5, zorder=5)
             if labels:
-                ax.annotate("string origin" if longitudinal else "reference origin",
+                origin_label = "string origin" if longitudinal else "reference origin"
+                if any(h.group == group and h.branch == leg
+                       and h.production_basis in ("string_origin_and_breakup", "string_origin") for h in hadrons):
+                    origin_label += " / end production"
+                ax.annotate(origin_label,
                             (vertex[component], vertex[0]), xytext=(6, -12),
                             textcoords="offset points", fontsize=7, color=colors[group])
     if trace.primary is not None:
@@ -1029,7 +1051,9 @@ def draw_diagram(trace, hadrons, axis, labels, title, colors, plt, Line2D,
         Line2D([], [], color="black", linestyle="--", label="Hadron worldline (p/E)"),
     ]
     if seen_planes or any(row[1] is not None or row[2] is not None for row in data):
-        handles.insert(0, Line2D([], [], color="green", marker="o", linestyle="none", label="Breakup / boundary turn"))
+        handles.insert(0, Line2D([], [], color="green", marker="o", linestyle="none", label="Breakup (pair creation)"))
+    if seen_turns:
+        handles.insert(1, Line2D([], [], color="green", marker="^", linestyle="none", label="T: boundary turn (no breakup)"))
     if show_lund and seen_planes and (boundaries or reference_data or area):
         from matplotlib.patches import Patch
         handles.extend([
@@ -1041,7 +1065,7 @@ def draw_diagram(trace, hadrons, axis, labels, title, colors, plt, Line2D,
             handles.append(Patch(facecolor="grey", alpha=0.16, label="Verified reference string area"))
         if not longitudinal:
             handles.extend([
-                Line2D([], [], color="green", marker="o", markerfacecolor="none", linestyle="none", label="RB: reference breakup / turn"),
+                Line2D([], [], color="green", marker="o", markerfacecolor="none", linestyle="none", label="RB: reference breakup"),
                 Line2D([], [], color="purple", marker="o", markerfacecolor="none", linestyle="none", label="RF: reference meeting"),
             ])
     if models:
@@ -1076,6 +1100,8 @@ def draw_diagram(trace, hadrons, axis, labels, title, colors, plt, Line2D,
                      else "input-string-rest" if frame == "string-rest" and not longitudinal else frame)
     ax.set_title(title + f"\nEvent {trace.event}, attempt {trace.attempt}, mode {trace.mode}; frame: {display_frame}")
     notes = "P/H = PYTHIA parton/hadron index; ID = OSCAR output_ID. Faded points: not exported.\n"
+    if seen_turns:
+        notes += "Green circles B/RB create pairs; triangles T/RT are geometric turns. New ordinary end production assignments use the origin.\n"
     if longitudinal:
         if seen_planes:
             notes += "Lund massless-reference picture: bold original endpoints; thin breakup constituents; verified string area is shaded.\n"
@@ -1116,7 +1142,7 @@ def draw_diagram(trace, hadrons, axis, labels, title, colors, plt, Line2D,
     if collapse_notes:
         notes += "\nSome collapse assignments do not support the effective late diamond; their available input endpoint model is shown."
     if any(h.first is not None and h.second is not None and h.saved[0] < max(h.first[0], h.second[0]) - 1e-8 for h in hadrons):
-        notes += "\nH!: stored lab-frame formation precedes an associated breakup; no causal constituent connection is implied."
+        notes += "\nH!: stored lab-frame formation precedes an associated geometric point; no causal constituent connection is implied."
     if not trace.vertices:
         notes += "\nVertex generation is OFF; saved coordinates may be default zeros."
     elif trace.mode != 2:
@@ -1213,9 +1239,9 @@ def time_tables(trace, hadrons, plt, frame="lab"):
         final = hadron.final_saved or hadron.saved
         production = hadron.prod_time
         if frame != "lab" and production is not None:
-            first = hadron.final_first or hadron.first
-            second = hadron.final_second or hadron.second
-            # The earliest breakup is frame dependent. A scalar time alone
+            first = hadron.final_production_first or hadron.production_first or hadron.final_first or hadron.first
+            second = hadron.final_production_second or hadron.production_second or hadron.final_second or hadron.second
+            # The earliest production reference is frame dependent. A scalar time alone
             # cannot supply a rest-frame production time.
             production = (min(transformed_time(first, hadron.group), transformed_time(second, hadron.group))
                           if first is not None and second is not None else None)
@@ -1224,11 +1250,10 @@ def time_tables(trace, hadrons, plt, frame="lab"):
             str(hadron.index), str(hadron.output_id) if hadron.output_id is not None else "-",
             f"{hadron.name or hadron.pdg} ({hadron.pdg})",
             f"{production:.8g}" if production is not None else "unavailable",
-            f"{transformed_time(hadron.saved, hadron.group):.8g}", f"{transformed_time(final, hadron.group):.8g}",
+            f"{transformed_time(final, hadron.group):.8g}",
         ])
     headers = ["Pass/string", "H", "OSCAR ID", "Particle (PDG)", "prod_time",
-               "saved form_time" if trace.mode == 2 else "saved t",
-               "final form_time" if trace.mode == 2 else "final t"]
+               "form_time" if trace.mode == 2 else "vertex t"]
     for start in range(0, len(rows), 32):
         fig, ax = plt.subplots(figsize=(11.7, 8.3))
         ax.set_axis_off()
@@ -1236,7 +1261,7 @@ def time_tables(trace, hadrons, plt, frame="lab"):
         page_rows = rows[start:start + 32]
         height = (len(page_rows) + 1) / 36
         table = ax.table(cellText=page_rows, colLabels=headers, cellLoc="center",
-                         colWidths=[0.12, 0.05, 0.08, 0.27, 0.16, 0.16, 0.16],
+                         colWidths=[0.13, 0.06, 0.09, 0.32, 0.20, 0.20],
                          bbox=[0, 1 - height, 1, height])
         table.auto_set_font_size(False)
         table.set_fontsize(8)
@@ -1245,9 +1270,9 @@ def time_tables(trace, hadrons, plt, frame="lab"):
             if row == 0:
                 cell.set_facecolor("0.9")
         fig.text(0.08, 0.05,
-                 "Saved time is the fragmentation assignment; final time includes later changes. In mode 2 these are formation times.\n"
-                 "Unavailable is distinct from zero: single-hadron collapses have no recorded breakup-based prod_time.\n"
-                 "Rest-frame prod_time is recomputed from the two full breakup vertices, not boosted as a scalar.\n"
+                 "form_time uses the final particle vertex when available, otherwise the fragmentation assignment; mode 2 stores formation.\n"
+                 "Unavailable is distinct from zero. Older traces retain their historical production-time assignments.\n"
+                 "Rest-frame prod_time uses full production references (origins/breakups), not a scalar time boost.\n"
                  "Rest tables use the input string CM and primary origin, like saved-vertex rest plots. Effective diamond pages use the final hadron CM.\n"
                  "Rows for different strings have different rest frames; this table does not define a common event CM.\n"
                  "OSCAR ID '-' means not exported. Spectators are excluded. Reference meeting times can differ from saved formation times.", fontsize=8)
@@ -1377,13 +1402,6 @@ def main() -> None:
     except (OSError, ValueError, KeyError) as error:
         parser.error(str(error))
     print(f"Saved {output} ({len(hadrons)} hadrons, {len(groups)} string/pass groups)")
-    if trace.version >= 5:
-        for h in hadrons:
-            if h.branch != "one-hadron-collapse":
-                continue
-            current = f"{h.color_connection_time:.8g} fm/c" if h.color_connection_time is not None else h.color_connection_status
-            first = f"{h.color_connection_first_time:.8g} fm/c" if h.color_connection_first_time is not None else h.color_connection_first_status
-            print(f"{group_name(h.group)}, H{h.index}: colour component current start: {current}; first appearance: {first} (lab model clock).")
     if len(groups) > 1 and args.frame != "lab":
         print("Multi-string overview uses lab only; individual strings use their own rest frames when available.")
     for group, reason in rest_unavailable.items():
@@ -1410,7 +1428,7 @@ def main() -> None:
                 except ValueError as error:
                     print(f"{group_name(hadron.group)}: effective collapse diamond omitted: {error}")
     if not trace.planes and not collapse_groups:
-        print("No parameter plane: ordinary Lund reference paths require v3-v5 geometry; massive input endpoints remain available.")
+        print("No parameter plane: ordinary Lund reference paths require v3/v4 geometry; massive input endpoints remain available.")
 
 
 if __name__ == "__main__":

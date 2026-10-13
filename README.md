@@ -94,8 +94,10 @@ recorded momentum is timelike. The container includes the script at
 **Lund boundaries are enabled on the first overview and saved-vertex pages**,
 including `--overview-only`. Bold solid lines show original endpoint boundaries,
 thin lines show breakup constituents, and verified reference string area is
-shaded. Filled green/purple circles show stored breakup/formation vertices;
-hollow `RB`/`RF` circles show converted reference breakups/meetings. The primary
+shaded. Filled green/purple circles show stored pair-creation/formation vertices;
+green triangles `T` mark boundary turns, not string breaks. Hollow `RB`/`RF`
+circles show converted reference breakups/meetings; `RT` triangles show
+reference turns. The primary
 vertex is a yellow star. Reference and saved formation points can differ because
 Pythia's late prescription uses the full hadron momentum, including transverse
 fragmentation momentum even when vertex smearing is off.
@@ -155,45 +157,25 @@ Useful options:
 - `--axis x`, `--axis y`, `--no-labels`, `-o output.pdf`.
 - `--no-table`: omit final tables; `--overview-only` omits per-string pages and tables.
 
-Tables show recorded `prod_time`, saved formation time, and final formation
-time in mode 2. Rest-frame production time is recomputed from the two breakup
-four-vertices; scalar lab times are not boosted. Missing collapse production
-times are shown as `unavailable`, not zero. Rest tables use the input string CM
+Tables show recorded `prod_time` and one `form_time` in mode 2. Formation time
+uses the final particle record when available, otherwise the fragmentation
+assignment. Rest-frame production time is recomputed from the full production
+references; scalar lab times are not boosted. Rest tables use the input string CM
 and primary origin, matching saved-vertex plots; effective diamond pages use
 the final hadron CM and inherited origin.
 The rest-frame table collects rows from different strings on the same page,
 with each row evaluated in its own input string CM, rather than assigning a
 common rest frame to the multi-string event.
 
-### Colour-connection history
+In mode 2, the first and last hadrons of an ordinary open string use its inherited
+origin in place of the endpoint turn when selecting the earlier production
+reference. The geometric turns are retained for the boundary paths and unchanged
+late formation calculation. Interior hadrons still use their two breakup points;
+two-hadron mini-strings, closed strings and junctions keep their existing rules.
+Single-hadron collapses use the inherited collapse origin directly for production,
+without constructing a breakup pair. Rebuild PYTHIA/eHIJING and regenerate events
+to apply these assignments; older traces retain their historical production times.
 
-With `HadronVertex:trace = on`, new v5 traces include the medium-stage colour
-history, captured before hadronizer import. `COLOUR_SOURCE` gives stable,
-per-attempt parton identities and their source-event indices; `IMPORT` maps
-them into the hadronizer. `COLOUR_CHANGE` records old/new colour ports and the
-sampled collision or emission clock; `COLOUR_LINK` gives each tag's two source
-identities and its creation/removal changes. Particle copies retain their
-identity, and native joining entries are followed through their mothers.
-
-Each `STRING_CONNECTION` and single-hadron-collapse record lists the source
-and link IDs used to establish its provenance:
-
-- `color_connection_first_time`: first recorded appearance of this complete
-  source component.
-- `color_connection_time`: start of its current uninterrupted connection episode.
-- Corresponding `*_status` fields explain unavailable clocks or provenance.
-- `color_latest_known_link_time`: diagnostic time of the newest currently
-  surviving timed link; it does not by itself date component creation.
-
-Times are sampled model-clock times in fm/c relative to the hard interaction,
-in the lab/nuclear frame. Pre-medium shower connections have no sampled birth
-clock and remain unavailable. Incomplete/junction graphs, changed native colour
-ports, missing identities, and nonchronological operations also remain
-unavailable. These scalar clocks do not provide a collision four-vertex and
-cannot be boosted to a rest frame. They do not set `prod_time`, `form_time`,
-or the diagram origin. The plotter reads v2-v5 and prints each collapse's
-connection clocks/statuses. Rebuild PYTHIA/eHIJING and regenerate events to
-obtain these records; older traces cannot recover the missing history.
 - `--duration 5`: extend free hadron worldlines by 5 fm/c beyond the latest
   formation. This does not set constituent trajectory lengths.
 - `--no-lund-boundaries`: omit the overlay on overview/saved-vertex pages.
