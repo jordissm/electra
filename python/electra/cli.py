@@ -540,17 +540,17 @@ def build_parser() -> argparse.ArgumentParser:
     per.add_argument(
         "--hard-process-config",
         required=True,
-        help="eHIJING hard-process setting file, e.g. input/ehijing/hermes.setting",
+        help="eHIJING hard-process setting file, e.g. input/ehijing/experiments/hermes/hard_process.setting",
     )
     per.add_argument(
         "--hadronization-config",
         required=True,
-        help="eHIJING hadronization setting file, e.g. input/ehijing/hadronization.setting",
+        help="eHIJING hadronization setting file, e.g. input/ehijing/experiments/hermes/hadronization.setting",
     )
     per.add_argument(
         "--dis-cuts-config",
         required=True,
-        help="eHIJING DIS cuts file, e.g. input/ehijing/dis_cuts/hermes.setting",
+        help="eHIJING DIS cuts file, e.g. input/ehijing/experiments/hermes/dis_cuts.setting",
     )
     per.set_defaults(func=cmd_ehijing)
 
