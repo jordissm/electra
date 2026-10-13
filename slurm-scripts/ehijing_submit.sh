@@ -67,9 +67,12 @@ Z=1 #36
 A=2 #84
 MED_MODIF_MODE=0
 K=4.0
-CONFIG_PATH="${CONFIG_PATH:-$PROJECT_ROOT/input/ehijing/hermes.setting}"
-HADRONIZATION_CONFIG_PATH="${HADRONIZATION_CONFIG_PATH:-$PROJECT_ROOT/input/ehijing/hadronization.setting}"
-DIS_CUTS_CONFIG_PATH="${DIS_CUTS_CONFIG_PATH:-$PROJECT_ROOT/input/ehijing/dis_cuts/hermes.setting}"
+# Select the settings bundle under input/ehijing/experiments/ (required).
+: "${EXPERIMENT:?Set EXPERIMENT to an experiment directory under input/ehijing/experiments/}"
+EXPERIMENT_CONFIG_DIR="$PROJECT_ROOT/input/ehijing/experiments/$EXPERIMENT"
+CONFIG_PATH="${CONFIG_PATH:-$EXPERIMENT_CONFIG_DIR/hard_process.setting}"
+HADRONIZATION_CONFIG_PATH="${HADRONIZATION_CONFIG_PATH:-$EXPERIMENT_CONFIG_DIR/hadronization.setting}"
+DIS_CUTS_CONFIG_PATH="${DIS_CUTS_CONFIG_PATH:-$EXPERIMENT_CONFIG_DIR/dis_cuts.setting}"
 
 for config in \
     "$CONFIG_PATH" \
