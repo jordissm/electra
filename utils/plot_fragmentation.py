@@ -7,6 +7,8 @@ Version 3 also records the massless-reference parameter
 plane for longitudinal Lund constituent worldlines. Those are plotted separately
 from the saved vertices: transverse smearing/tunnelling and heavy-endpoint
 corrections do not define classical constituent paths through saved_vertex.
+Lund pages emphasize original endpoint boundaries and shade the surviving
+string worldsheet; by default they use each string's CM longitudinal axis.
 Hadron worldlines use dx/dt = p/E. No OSCAR smearing is applied.
 """
 
@@ -119,6 +121,7 @@ class Plane:
     kappa: float
     regions: dict[tuple[int, int], tuple[Vertex, Vertex, Vertex]] = field(default_factory=dict)
     breaks: dict[int, tuple[float, float]] = field(default_factory=dict)
+    break_roles: dict[int, str] = field(default_factory=dict)
 
     def location(self, u: float, v: float) -> Vertex:
         # u/v increase toward the future; each integer is a region boundary.
@@ -166,6 +169,33 @@ class Plane:
             else:
                 raise ValueError("No recorded region covers this constituent segment")
         return result
+
+    def string_cells(self) -> list[list[Vertex]]:
+        """Surviving string area, excluding the future of every pair creation.
+
+        A break removes its future quadrant in the Lund u/v plane. Subdivide
+        recorded regions along break coordinates so each retained cell is
+        entirely string, and map its corners with that region's own basis.
+        Incomplete pair-creation coordinates cannot determine this area.
+        """
+        pair_indices = [i for i, role in self.break_roles.items() if role == "pair_creation"]
+        if not self.break_roles or any(i not in self.breaks for i in pair_indices):
+            raise ValueError("String area requires coordinates for every pair-creation breakup")
+        breaks = [self.breaks[i] for i in pair_indices]
+        cells = []
+        for (pos, neg), (offset, plus, minus) in self.regions.items():
+            u0, v0 = float(self.maximum - pos), float(self.maximum - neg)
+            us = sorted({u0, u0 + 1, *(u for u, _ in breaks if u0 < u < u0 + 1)})
+            vs = sorted({v0, v0 + 1, *(v for _, v in breaks if v0 < v < v0 + 1)})
+            for left, right in zip(us, us[1:]):
+                for bottom, top in zip(vs, vs[1:]):
+                    middle = ((left + right) / 2, (bottom + top) / 2)
+                    if any(middle[0] > u and middle[1] > v for u, v in breaks):
+                        continue
+                    cells.append([add(offset, scale(add(scale(plus, u - u0),
+                        scale(minus, v - v0)), 1 / self.kappa))
+                        for u, v in ((left, bottom), (right, bottom), (right, top), (left, top))])
+        return cells
 
 
 def point(value: str | None) -> Vertex | None:
@@ -240,6 +270,7 @@ def read_trace(path: Path) -> Trace:
                             point(values["minus_GeV"]))
                 elif body.startswith("PARAMETER_BREAKUP "):
                     plane = planes[(group, values["leg"])]
+                    plane.break_roles[int(values["index"])] = values["role"]
                     pos, neg = int(values["i_pos"]), int(values["i_neg"])
                     if pos >= 0 and neg >= 0:
                         plane.breaks[int(values["index"])] = (
@@ -438,20 +469,51 @@ def reference_hadron(trace: Trace, hadron: Hadron):
     formation = plane.location(*meeting)
     if any(max(abs(a - b) for a, b in zip(path[-1], formation)) > 1e-7 for path in paths):
         raise ValueError("The two recorded constituent paths do not meet continuously")
-    # Include the original endpoints moving outward before their first turn.
-    # Boundary points B0/Bn are turns, not newly created quark pairs.
-    boundary = max(plane.breaks)
-    for index, uv, start in ((ia, a, (float(plane.maximum), 0.)),
-                             (ib, b, (0., float(plane.maximum)))):
-        if index not in (0, boundary) or trace.strings.get(hadron.group, {}).get("topology") != "open":
-            continue
-        if max(abs(x) for x in plane.location(*start)) < 1e-7:
-            paths.append(plane.path(start, uv))
     momentum = scale(add(scale(formation, 2), scale(add(first, second), -1)), plane.kappa)
     origin = reference_origin(trace, hadron)
     return (add(origin, first), add(origin, second),
             add(origin, formation), momentum,
             [[add(origin, vertex) for vertex in path] for path in paths])
+
+
+def reference_endpoints(trace: Trace, hadron: Hadron):
+    """Original endpoint paths independent of a hadron's final-two solution.
+
+    This prevents a missing hadron path from also hiding an original string
+    arm. B0/Bn are massless-reference turns, not pair-creation vertices.
+    """
+    plane = trace.planes[(hadron.group, hadron.branch)]
+    if trace.strings.get(hadron.group, {}).get("topology") != "open":
+        return [], []
+    boundary = sorted(i for i, role in plane.break_roles.items() if role == "boundary")
+    if len(boundary) != 2:
+        return [], ["Endpoint boundary labels are incomplete"]
+    origin = reference_origin(trace, hadron)
+    paths, omitted = [], []
+    for index, role, start in ((boundary[0], "positive_endpoint", (float(plane.maximum), 0.)),
+                               (boundary[-1], "negative_endpoint", (0., float(plane.maximum)))):
+        try:
+            uv = plane.breaks[index]
+            if max(abs(x) for x in plane.location(*start)) > 1e-7:
+                raise ValueError("Initial endpoint region does not start at the reference origin")
+            path = plane.path(start, uv)
+            # Continue along the endpoint characteristic to its adjacent
+            # hadron's reference meeting, if that solution is reconstructible.
+            for h in trace.hadrons:
+                if h.group == hadron.group and h.branch == hadron.branch and h.break_indices is not None and index in h.break_indices:
+                    try:
+                        row = reference_hadron(trace, h)
+                    except ValueError:
+                        continue
+                    side = h.break_indices.index(index)
+                    absolute = [add(origin, v) for v in path]
+                    paths.append((role, absolute + row[4][side][1:]))
+                    break
+            else:
+                paths.append((role, [add(origin, v) for v in path]))
+        except (KeyError, ValueError) as error:
+            omitted.append(f"{role}: {error}")
+    return paths, omitted
 
 
 def place_labels(fig, ax, reserved=()):
@@ -488,10 +550,11 @@ def place_labels(fig, ax, reserved=()):
 def draw_diagram(trace, hadrons, axis, labels, title, colors, plt, Line2D,
                  frame="lab", duration=None, longitudinal=False):
     fig, ax = plt.subplots(figsize=(11.7, 8.3))
-    component = {"x": 1, "y": 2, "z": 3}[axis]
+    component = {"x": 1, "y": 2, "z": 3, "longitudinal": 1}[axis]
     groups = sorted({h.group for h in hadrons})
     beta = (0., 0., 0.)
     origin = (0., 0., 0., 0.)
+    direction = None
     if frame == "string-rest":
         if len(groups) != 1:
             raise ValueError("Select one string/pass with --string and --pass for a common string rest frame")
@@ -499,15 +562,40 @@ def draw_diagram(trace, hadrons, axis, labels, title, colors, plt, Line2D,
         if total is None or total[0] <= 0:
             raise ValueError("The selected string has no valid total momentum")
         beta = tuple(p / total[0] for p in total[1:])
-        origin = trace.primary or origin
+        origin = reference_origin(trace, hadrons[0]) if longitudinal else trace.primary or origin
+
+    if axis == "longitudinal":
+        if frame != "string-rest" or len(groups) != 1:
+            raise ValueError("A longitudinal string-axis view requires one string in its rest frame")
+        # Use the geometry's positive light-cone direction. A two-hadron
+        # mini-string can choose a decay axis different from the input parton
+        # axis; its reference worldsheet follows that recorded decay geometry.
+        positive = next((plane.regions[(0, plane.maximum)][1]
+                         for (group, _), plane in trace.planes.items()
+                         if group == groups[0] and (0, plane.maximum) in plane.regions), None)
+        if positive is None:
+            positive = next((p.momentum for p in trace.partons.get(groups[0], [])
+                             if p.role == "positive_endpoint" and p.momentum is not None), None)
+        if positive is None:
+            raise ValueError("The string has no recorded longitudinal reference direction")
+        p = boost(positive, beta)
+        magnitude = math.sqrt(sum(q * q for q in p[1:]))
+        if magnitude < 1e-10:
+            raise ValueError("The string has no resolved longitudinal reference direction")
+        direction = tuple(q / magnitude for q in p[1:])
+
+    def project(vector):
+        if direction is None:
+            return vector
+        return (vector[0], sum(q * n for q, n in zip(vector[1:], direction)), 0., 0.)
 
     def position(vertex):
-        return boost(add(vertex, scale(origin, -1)), beta)
+        return project(boost(add(vertex, scale(origin, -1)), beta))
 
-    def line(vertices, color, linestyle="-", alpha=1.):
+    def line(vertices, color, linestyle="-", alpha=1., width=1.1):
         transformed = [position(vertex) for vertex in vertices]
         ax.plot([v[component] for v in transformed], [v[0] for v in transformed],
-                color=color, linestyle=linestyle, linewidth=1.1, alpha=alpha)
+                color=color, linestyle=linestyle, linewidth=width, alpha=alpha)
 
     data = []
     skipped = 0
@@ -522,7 +610,36 @@ def draw_diagram(trace, hadrons, axis, labels, title, colors, plt, Line2D,
             first, second, formation, momentum, paths = (
                 hadron.first, hadron.second, hadron.saved, hadron.momentum, [])
         data.append((hadron, first, second, formation, momentum, paths))
-    if longitudinal and not data:
+    boundaries = []
+    area = []
+    geometry_notes = []
+    if longitudinal:
+        from matplotlib.collections import PolyCollection
+        seen_planes = set()
+        for hadron in hadrons:
+            key = (hadron.group, hadron.branch)
+            if key not in trace.planes or key in seen_planes:
+                continue
+            seen_planes.add(key)
+            origin_ref = reference_origin(trace, hadron)
+            endpoint_paths, omitted = reference_endpoints(trace, hadron)
+            boundaries.extend((hadron.group, role, path) for role, path in endpoint_paths)
+            geometry_notes.extend(omitted)
+            try:
+                cells = trace.planes[key].string_cells()
+            except ValueError as error:
+                geometry_notes.append(str(error))
+            else:
+                area.extend((hadron.group, [add(origin_ref, v) for v in cell]) for cell in cells)
+        polygons, facecolors = [], []
+        for group, cell in area:
+            values = [position(v) for v in cell]
+            polygons.append([(v[component], v[0]) for v in values])
+            facecolors.append(colors[group])
+        if polygons:
+            ax.add_collection(PolyCollection(polygons, facecolors=facecolors, edgecolors="none", alpha=0.16, zorder=0))
+            ax.autoscale_view()
+    if longitudinal and not data and not boundaries and not area:
         ax.set_axis_off()
         ax.set_title(title)
         ax.text(0.05, 0.65, "No reconstructable longitudinal constituent paths for this selection.\n"
@@ -540,6 +657,9 @@ def draw_diagram(trace, hadrons, axis, labels, title, colors, plt, Line2D,
             else:
                 omitted_models[group] = reason
     times = [position(row[3])[0] for row in data]
+    if not times:
+        times = [position(v)[0] for _, _, path in boundaries for v in path]
+        times.extend(position(v)[0] for _, cell in area for v in cell)
     primary_time = position(trace.primary)[0] if trace.primary is not None else min(times)
     end_time = max(times) + (duration if duration is not None else max(1., 0.25 * (max(times) - primary_time)))
     for group, curves in models.items():
@@ -579,7 +699,7 @@ def draw_diagram(trace, hadrons, axis, labels, title, colors, plt, Line2D,
         # Only exported final hadrons are extrapolated indefinitely; no invented
         # decay/interaction lifetime is assigned to nonfinal particles.
         if momentum is not None and hadron.output_id is not None:
-            p = boost(momentum, beta)
+            p = project(boost(momentum, beta))
             if p[0] > 0:
                 end = (end_time, *(x + q / p[0] * (end_time - vertex[0])
                                    for x, q in zip(vertex[1:], p[1:])))
@@ -595,6 +715,41 @@ def draw_diagram(trace, hadrons, axis, labels, title, colors, plt, Line2D,
                 label += f" / ID {hadron.output_id}"
             ax.annotate(label, (vertex[component], vertex[0]), xytext=(4, 4),
                         textcoords="offset points", fontsize=7, color=color, alpha=alpha)
+    for group, role, path in boundaries:
+        color = colors[group]
+        line(path, color, width=2.6)
+        if labels and len(path) > 1:
+            parton = next((p for p in trace.partons.get(group, []) if p.role == role), None)
+            name = f"P{parton.index} ({parton.name or parton.pdg})" if parton else role.replace("_", " ")
+            # Label the outward boundary halfway to its first turn.
+            location = position(scale(add(path[0], path[1]), 0.5))
+            ax.annotate(name, (location[component], location[0]), xytext=(6, 4),
+                        textcoords="offset points", fontsize=8, color=color)
+    if longitudinal:
+        for group, leg in seen_planes:
+            seed = next(h for h in hadrons if h.group == group and h.branch == leg)
+            origin_ref = reference_origin(trace, seed)
+            plane = trace.planes[(group, leg)]
+            for index, uv in plane.breaks.items():
+                try:
+                    breakup = add(origin_ref, plane.location(*uv))
+                except ValueError:
+                    continue
+                key = (group, breakup)
+                if key in seen_breakups:
+                    continue
+                vertex = position(breakup)
+                ax.plot(vertex[component], vertex[0], "o", color="green", markersize=6, zorder=5)
+                if labels:
+                    ax.annotate(f"B{index}", (vertex[component], vertex[0]), xytext=(-5, -10),
+                                textcoords="offset points", fontsize=7, color="green")
+                seen_breakups.add(key)
+            vertex = position(origin_ref)
+            ax.plot(vertex[component], vertex[0], "o", color=colors[group],
+                    markerfacecolor="white", markersize=5, zorder=5)
+            if labels:
+                ax.annotate("string origin", (vertex[component], vertex[0]), xytext=(6, -12),
+                            textcoords="offset points", fontsize=7, color=colors[group])
     if trace.primary is not None:
         primary = position(trace.primary)
         ax.plot(primary[component], primary[0], "*", color="yellow", markerfacecolor="yellow",
@@ -612,7 +767,13 @@ def draw_diagram(trace, hadrons, axis, labels, title, colors, plt, Line2D,
         Line2D([], [], color="black", linestyle="--", label="Hadron worldline (p/E)"),
     ]
     if longitudinal:
-        handles.append(Line2D([], [], color="black", linestyle="-", label="Longitudinal constituent worldline"))
+        from matplotlib.patches import Patch
+        handles.extend([
+            Line2D([], [], color="black", linewidth=2.6, label="Original endpoint boundary"),
+            Line2D([], [], color="black", linewidth=1.1, label="Breakup constituent boundary"),
+            Patch(facecolor="grey", alpha=0.16, label="Surviving string worldsheet"),
+            Line2D([], [], color="black", marker="o", markerfacecolor="white", linestyle="none", label="Shared string reference origin"),
+        ])
     elif models:
         handles.extend([
             Line2D([], [], color="black", linestyle="-.", label="Massive endpoint (model)"),
@@ -627,7 +788,7 @@ def draw_diagram(trace, hadrons, axis, labels, title, colors, plt, Line2D,
     for group in groups:
         handles.append(Line2D([], [], color=colors[group], linewidth=2, label=group_name(group)))
     ax.legend(handles=handles, loc="upper left", bbox_to_anchor=(1.02, 1), fontsize=8)
-    ax.set_xlabel(f"{axis} [fm]")
+    ax.set_xlabel("z_parallel [fm] (string reference CM axis)" if direction is not None else f"{axis} [fm]")
     ax.set_ylabel("t [fm/c]")
     ax.set_aspect("equal", adjustable="datalim")
     ax.grid(alpha=0.2)
@@ -635,11 +796,14 @@ def draw_diagram(trace, hadrons, axis, labels, title, colors, plt, Line2D,
     ax.set_title(title + f"\nEvent {trace.event}, attempt {trace.attempt}, mode {trace.mode}; frame: {frame}")
     notes = "P/H = PYTHIA parton/hadron index; ID = OSCAR output_ID. Faded points: not exported.\n"
     if longitudinal:
-        notes += "Classical longitudinal massless-reference Lund paths; transverse tunnelling/smearing and heavy-endpoint corrections excluded.\n"
-        notes += "Formation points and hadron slopes on this page belong to the longitudinal reference picture."
+        notes += "Lund massless-reference picture: bold original endpoints; thin breakup constituents; shaded area contains string.\n"
+        notes += "Shading excludes the future of pair creations. Transverse tunnelling/smearing and massive-endpoint corrections are excluded.\n"
+        notes += "Purple meeting points and outgoing hadron slopes belong to this reference picture; see saved-vertex pages for recorded formation."
         notes += "\nShared reference origin: mean recorded endpoint vertex (or mean leg origin); saved metadata is unchanged."
         if skipped:
             notes += f"\n{skipped} hadron(s) omitted: missing/invalid parameter-plane path; no trajectory was interpolated."
+        if geometry_notes:
+            notes += "\nIncomplete geometry: " + "; ".join(dict.fromkeys(geometry_notes))
     else:
         notes += "Recorded vertices; free hadron worldlines begin at saved formation points.\n"
         if models:
@@ -752,7 +916,9 @@ def main() -> None:
     parser.add_argument("--no-labels", action="store_true", help="Omit particle labels on diagrams")
     parser.add_argument("--overview-only", action="store_true", help="Save just the overview diagram")
     parser.add_argument("--frame", choices=["lab", "string-rest"], default="lab",
-                        help="Plot frame; string-rest requires one selected string/pass")
+                        help="Saved-vertex plot/table frame; string-rest requires one selected string/pass")
+    parser.add_argument("--lund-view", choices=["string-rest", "projection"], default="string-rest",
+                        help="Lund pages: each string's CM longitudinal axis (default), or the selected --frame/--axis projection")
     parser.add_argument("--duration", type=float,
                         help="Continue free hadron worldlines this many fm/c past the last formation time")
     args = parser.parse_args()
@@ -793,16 +959,18 @@ def main() -> None:
                     title = group_name(group)
                     if info:
                         title += f" - {info.get('branch', '')}, {info.get('topology', '')}, mass {float(info['mass_GeV']):.6g} GeV"
-                    if len(groups) > 1:
-                        fig = draw_diagram(trace, subset, args.axis, not args.no_labels,
-                                           title, colors, plt, Line2D, args.frame, args.duration)
+                    if any(key[0] == group for key in trace.planes):
+                        lund_axis = "longitudinal" if args.lund_view == "string-rest" else args.axis
+                        lund_frame = "string-rest" if args.lund_view == "string-rest" else args.frame
+                        fig = draw_diagram(trace, subset, lund_axis, not args.no_labels,
+                                           "Lund string boundaries (massless reference)\n" + title,
+                                           colors, plt, Line2D, lund_frame, args.duration,
+                                           longitudinal=True)
                         pdf.savefig(fig)
                         plt.close(fig)
-                    if any(key[0] == group for key in trace.planes):
+                    if len(groups) > 1:
                         fig = draw_diagram(trace, subset, args.axis, not args.no_labels,
-                                           "Longitudinal Lund worldlines: " + title,
-                                           colors, plt, Line2D, args.frame, args.duration,
-                                           longitudinal=True)
+                                           "Saved vertices: " + title, colors, plt, Line2D, args.frame, args.duration)
                         pdf.savefig(fig)
                         plt.close(fig)
                 for fig in time_tables(trace, hadrons, plt, args.frame):

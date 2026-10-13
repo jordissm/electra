@@ -92,9 +92,20 @@ solid purple circles, and the primary vertex a yellow star. Options include
 `--duration 5`, `--no-labels`, `--overview-only`, and `-o output.pdf`.
 The container includes the utility at `/opt/electra/share/utils/plot_fragmentation.py`.
 Hadron worldlines use `dx/dt = p/E` from saved formation points before OSCAR
-smearing. Separate constituent pages use the longitudinal massless-reference
-string picture, excluding transverse tunnelling/smearing and heavy-endpoint
-corrections; their formation points can differ from the saved vertices.
+smearing. The Lund pages show bold original endpoint boundaries, thin
+constituent boundaries from each breakup, and a shaded surviving string
+worldsheet. By default each page uses that string's rest frame with the spatial
+axis aligned with its recorded positive light-cone direction. This gives the usual Lund
+opening arms and fragmented string regions. Use `--lund-view projection` for
+these pages in the selected `--frame` and `--axis` instead.
+These pages use the longitudinal massless-reference picture, excluding
+transverse tunnelling/smearing and heavy-endpoint corrections; their formation
+points can differ from the saved vertices. Shading removes the future of every
+pair-creation breakup; incomplete breakup coordinates suppress the shading.
+Original outward endpoint arms are reconstructed independently of the hadron
+solutions, so a missing final-two path does not hide an otherwise recorded arm.
+One-hadron collapses have no recorded parameter plane and retain the separate
+massive-endpoint model on their saved-vertex pages.
 The saved-vertex pages also show both massive original endpoints of two-parton
 open strings, including one-hadron collapses. Dash-dot curves use the input
 momenta, masses and recorded starting vertices with a constant force
