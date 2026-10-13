@@ -69,9 +69,9 @@ patch_slurm_scripts() {
   if [[ -f "$dir/ehijing_submit.sh" ]]; then
   sed -i \
     -e "s|^PROJECT_ROOT=.*$|PROJECT_ROOT=\"\${PROJECT_ROOT:-$PREFIX}\"|" \
-    -e "s|^CONFIG_PATH=.*$|CONFIG_PATH=\"\${CONFIG_PATH:-$INPUT_DIR/ehijing/hermes.setting}\"|" \
-    -e "s|^HADRONIZATION_CONFIG_PATH=.*$|HADRONIZATION_CONFIG_PATH=\"\${HADRONIZATION_CONFIG_PATH:-$INPUT_DIR/ehijing/hadronization.setting}\"|" \
-    -e "s|^DIS_CUTS_CONFIG_PATH=.*$|DIS_CUTS_CONFIG_PATH=\"\${DIS_CUTS_CONFIG_PATH:-$INPUT_DIR/ehijing/dis_cuts/hermes.setting}\"|" \
+    -e "s|^CONFIG_PATH=.*$|CONFIG_PATH=\"\${CONFIG_PATH:-$INPUT_DIR/ehijing/experiments/\${EXPERIMENT}/hard_process.setting}\"|" \
+    -e "s|^HADRONIZATION_CONFIG_PATH=.*$|HADRONIZATION_CONFIG_PATH=\"\${HADRONIZATION_CONFIG_PATH:-$INPUT_DIR/ehijing/experiments/\${EXPERIMENT}/hadronization.setting}\"|" \
+    -e "s|^DIS_CUTS_CONFIG_PATH=.*$|DIS_CUTS_CONFIG_PATH=\"\${DIS_CUTS_CONFIG_PATH:-$INPUT_DIR/ehijing/experiments/\${EXPERIMENT}/dis_cuts.setting}\"|" \
     "$dir/ehijing_submit.sh"
   fi
 
