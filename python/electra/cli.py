@@ -162,6 +162,7 @@ def ehijing_task(
     config_file: Path,
     hadronization_config_file: Path,
     dis_cuts_config_file: Path,
+    history: Optional[str] = None,
 ) -> None:
     layout = ehijing_run_layout(run_dir)
     mkdir(layout["events"])
@@ -216,6 +217,8 @@ def ehijing_task(
         str(seed),
     ]
 
+    if history is not None:
+        cmd.extend(["--history", history])
     run(cmd)
 
     atomic_done_marker(chunk_done)
@@ -234,6 +237,7 @@ def ehijing_task(
         "hadronization_config": str(Path(hadronization_config_file)),
         "dis_cuts_config": str(Path(dis_cuts_config_file)),
         "events_dir": str(events_dir),
+        "history": history if history is not None else "executable_default",
     }
 
     with layout["manifest"].open("a", encoding="utf-8") as f:
@@ -390,6 +394,7 @@ def cmd_ehijing(args: argparse.Namespace) -> None:
         config_file=config_file,
         hadronization_config_file=hadronization_config_file,
         dis_cuts_config_file=dis_cuts_config_file,
+        history=getattr(args, "history", None),
     )
 
 
@@ -520,6 +525,10 @@ def build_parser() -> argparse.ArgumentParser:
     per.add_argument("--run-path", required=True)
     per.add_argument("--number-of-events", type=int, required=True)
     per.add_argument("--seed", type=int, default=12345)
+    per.add_argument(
+        "--history", choices=("on", "off"), default=None,
+        help="HepMC3 ASCII spacetime history (new eHIJING builds default to on)",
+    )
     per.add_argument(
         "--first-event-id",
         type=int,
