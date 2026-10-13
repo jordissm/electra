@@ -7,8 +7,9 @@ Version 3 also records the massless-reference parameter
 plane for longitudinal Lund constituent worldlines. Those are plotted separately
 from the saved vertices: transverse smearing/tunnelling and heavy-endpoint
 corrections do not define classical constituent paths through saved_vertex.
-Lund pages emphasize original endpoint boundaries and shade the surviving
-string worldsheet; by default they use each string's CM longitudinal axis.
+Lund reference boundaries are enabled on the overview and saved-vertex pages.
+Hollow RB/RF markers distinguish reference breakups/meetings from stored
+vertices. Dedicated Lund pages use each string's CM longitudinal axis.
 Hadron worldlines use dx/dt = p/E. No OSCAR smearing is applied.
 """
 
@@ -548,7 +549,7 @@ def place_labels(fig, ax, reserved=()):
 
 
 def draw_diagram(trace, hadrons, axis, labels, title, colors, plt, Line2D,
-                 frame="lab", duration=None, longitudinal=False):
+                 frame="lab", duration=None, longitudinal=False, lund_boundaries=True):
     fig, ax = plt.subplots(figsize=(11.7, 8.3))
     component = {"x": 1, "y": 2, "z": 3, "longitudinal": 1}[axis]
     groups = sorted({h.group for h in hadrons})
@@ -613,11 +614,19 @@ def draw_diagram(trace, hadrons, axis, labels, title, colors, plt, Line2D,
     boundaries = []
     area = []
     geometry_notes = []
-    if longitudinal:
+    show_lund = longitudinal or lund_boundaries
+    reference_data = data if longitudinal else []
+    skipped_reference = 0
+    seen_planes = set()
+    if show_lund:
         from matplotlib.collections import PolyCollection
-        seen_planes = set()
         for hadron in hadrons:
             key = (hadron.group, hadron.branch)
+            if not longitudinal and key in trace.planes:
+                try:
+                    reference_data.append((hadron, *reference_hadron(trace, hadron)))
+                except ValueError:
+                    skipped_reference += 1
             if key not in trace.planes or key in seen_planes:
                 continue
             seen_planes.add(key)
@@ -637,7 +646,8 @@ def draw_diagram(trace, hadrons, axis, labels, title, colors, plt, Line2D,
             polygons.append([(v[component], v[0]) for v in values])
             facecolors.append(colors[group])
         if polygons:
-            ax.add_collection(PolyCollection(polygons, facecolors=facecolors, edgecolors="none", alpha=0.16, zorder=0))
+            ax.add_collection(PolyCollection(polygons, facecolors=facecolors, edgecolors="none",
+                                            alpha=0.16 if longitudinal else 0.10, zorder=0))
             ax.autoscale_view()
     if longitudinal and not data and not boundaries and not area:
         ax.set_axis_off()
@@ -651,6 +661,11 @@ def draw_diagram(trace, hadrons, axis, labels, title, colors, plt, Line2D,
     omitted_models = {}
     if not longitudinal:
         for group in groups:
+            # Complete connected Lund boundaries take precedence over the
+            # independent unbroken-endpoint model on saved-vertex pages.
+            roles = {role for g, role, _ in boundaries if g == group}
+            if {"positive_endpoint", "negative_endpoint"} <= roles:
+                continue
             curves, reason = endpoint_curves(trace, group)
             if curves:
                 models[group] = curves
@@ -675,6 +690,17 @@ def draw_diagram(trace, hadrons, axis, labels, title, colors, plt, Line2D,
                 ax.annotate(f"P{curve.parton.index}", (start[component], start[0]), xytext=(4, -12),
                             textcoords="offset points", fontsize=7, color=color)
     seen_breakups = set()
+    if show_lund and not longitudinal:
+        for hadron, first, second, formation, momentum, paths in reference_data:
+            color = colors[hadron.group]
+            for path in paths:
+                line(path, color, width=1.3, alpha=0.85)
+            vertex = position(formation)
+            ax.plot(vertex[component], vertex[0], "o", color="purple",
+                    markerfacecolor="none", markersize=8, zorder=5)
+            if labels:
+                ax.annotate(f"RF{hadron.index}", (vertex[component], vertex[0]), xytext=(4, -10),
+                            textcoords="offset points", fontsize=7, color=color)
     for hadron, first, second, formation, momentum, paths in data:
         color = colors[hadron.group]
         alpha = 1. if hadron.output_id is not None else 0.4
@@ -725,7 +751,7 @@ def draw_diagram(trace, hadrons, axis, labels, title, colors, plt, Line2D,
             location = position(scale(add(path[0], path[1]), 0.5))
             ax.annotate(name, (location[component], location[0]), xytext=(6, 4),
                         textcoords="offset points", fontsize=8, color=color)
-    if longitudinal:
+    if show_lund:
         for group, leg in seen_planes:
             seed = next(h for h in hadrons if h.group == group and h.branch == leg)
             origin_ref = reference_origin(trace, seed)
@@ -739,16 +765,20 @@ def draw_diagram(trace, hadrons, axis, labels, title, colors, plt, Line2D,
                 if key in seen_breakups:
                     continue
                 vertex = position(breakup)
-                ax.plot(vertex[component], vertex[0], "o", color="green", markersize=6, zorder=5)
+                ax.plot(vertex[component], vertex[0], "o", color="green",
+                        markerfacecolor="green" if longitudinal else "none",
+                        markersize=6 if longitudinal else 8, zorder=5)
                 if labels:
-                    ax.annotate(f"B{index}", (vertex[component], vertex[0]), xytext=(-5, -10),
+                    label = f"B{index}" if longitudinal else f"RB{index}"
+                    ax.annotate(label, (vertex[component], vertex[0]), xytext=(-5, -10),
                                 textcoords="offset points", fontsize=7, color="green")
                 seen_breakups.add(key)
             vertex = position(origin_ref)
             ax.plot(vertex[component], vertex[0], "o", color=colors[group],
                     markerfacecolor="white", markersize=5, zorder=5)
             if labels:
-                ax.annotate("string origin", (vertex[component], vertex[0]), xytext=(6, -12),
+                ax.annotate("string origin" if longitudinal else "reference origin",
+                            (vertex[component], vertex[0]), xytext=(6, -12),
                             textcoords="offset points", fontsize=7, color=colors[group])
     if trace.primary is not None:
         primary = position(trace.primary)
@@ -766,7 +796,7 @@ def draw_diagram(trace, hadrons, axis, labels, title, colors, plt, Line2D,
                markersize=12, linestyle="none", label="Primary vertex"),
         Line2D([], [], color="black", linestyle="--", label="Hadron worldline (p/E)"),
     ]
-    if longitudinal:
+    if show_lund and (boundaries or reference_data or area):
         from matplotlib.patches import Patch
         handles.extend([
             Line2D([], [], color="black", linewidth=2.6, label="Original endpoint boundary"),
@@ -774,7 +804,12 @@ def draw_diagram(trace, hadrons, axis, labels, title, colors, plt, Line2D,
             Patch(facecolor="grey", alpha=0.16, label="Surviving string worldsheet"),
             Line2D([], [], color="black", marker="o", markerfacecolor="white", linestyle="none", label="Shared string reference origin"),
         ])
-    elif models:
+        if not longitudinal:
+            handles.extend([
+                Line2D([], [], color="green", marker="o", markerfacecolor="none", linestyle="none", label="RB: reference breakup / turn"),
+                Line2D([], [], color="purple", marker="o", markerfacecolor="none", linestyle="none", label="RF: reference meeting"),
+            ])
+    if models:
         handles.extend([
             Line2D([], [], color="black", linestyle="-.", label="Massive endpoint (model)"),
             Line2D([], [], color="black", marker="D", markerfacecolor="none", linestyle="none", label="Recorded endpoint start"),
@@ -806,6 +841,16 @@ def draw_diagram(trace, hadrons, axis, labels, title, colors, plt, Line2D,
             notes += "\nIncomplete geometry: " + "; ".join(dict.fromkeys(geometry_notes))
     else:
         notes += "Recorded vertices; free hadron worldlines begin at saved formation points.\n"
+        if show_lund and seen_planes:
+            notes += "Lund overlay: bold original endpoints, thin breakup constituents and shaded surviving string (massless reference).\n"
+            notes += "Hollow RB/RF points belong to that reference; filled circles show recorded vertices and may differ.\n"
+            notes += "Reference paths share the mean endpoint/leg origin; no fit to stored formation points is imposed.\n"
+            if skipped_reference or geometry_notes:
+                notes += f"Incomplete reference geometry: {skipped_reference} hadron path(s), {len(geometry_notes)} boundary/area issue(s) omitted.\n"
+        if show_lund:
+            missing = len(set(groups) - {group for group, _ in seen_planes})
+            if missing:
+                notes += f"No Lund parameter plane for {missing} group(s); only the available endpoint model is shown there.\n"
         if models:
             notes += "Endpoint curves: unbroken constant-tension two-parton model, from each recorded start through its first turn and return.\n"
             notes += "Force acts along the input CM momentum; distinct starting vertices are retained. Pair creation/recoil exchange are not modelled.\n"
@@ -919,6 +964,8 @@ def main() -> None:
                         help="Saved-vertex plot/table frame; string-rest requires one selected string/pass")
     parser.add_argument("--lund-view", choices=["string-rest", "projection"], default="string-rest",
                         help="Lund pages: each string's CM longitudinal axis (default), or the selected --frame/--axis projection")
+    parser.add_argument("--lund-boundaries", action=argparse.BooleanOptionalAction, default=True,
+                        help="Overlay connected Lund reference boundaries on overview/saved-vertex pages (default: enabled)")
     parser.add_argument("--duration", type=float,
                         help="Continue free hadron worldlines this many fm/c past the last formation time")
     args = parser.parse_args()
@@ -941,15 +988,18 @@ def main() -> None:
         from matplotlib.lines import Line2D
 
         groups = sorted({h.group for h in hadrons})
+        geometry_groups = {h.group for h in hadrons if (h.group, h.branch) in trace.planes}
         if args.frame == "string-rest" and len(groups) != 1:
             raise ValueError("Use --string and --pass to select one string for --frame string-rest")
         palette = plt.get_cmap("tab10" if len(groups) <= 10 else "tab20")
         colors = {group: palette(index % palette.N) for index, group in enumerate(groups)}
         with PdfPages(output, metadata={"Title": f"eHIJING event {trace.event} fragmentation",
                                         "Subject": "Hadronization spacetime diagram"}) as pdf:
+            overview_title = ("Lund boundaries and saved vertices" if args.lund_boundaries and geometry_groups
+                              else "Saved vertices, massive endpoints and hadron worldlines")
             fig = draw_diagram(trace, hadrons, args.axis, not args.no_labels,
-                               "Saved vertices, massive endpoints and hadron worldlines", colors, plt, Line2D,
-                               args.frame, args.duration)
+                               overview_title, colors, plt, Line2D,
+                               args.frame, args.duration, lund_boundaries=args.lund_boundaries)
             pdf.savefig(fig)
             plt.close(fig)
             if not args.overview_only:
@@ -970,7 +1020,8 @@ def main() -> None:
                         plt.close(fig)
                     if len(groups) > 1:
                         fig = draw_diagram(trace, subset, args.axis, not args.no_labels,
-                                           "Saved vertices: " + title, colors, plt, Line2D, args.frame, args.duration)
+                                           "Saved vertices: " + title, colors, plt, Line2D, args.frame, args.duration,
+                                           lund_boundaries=args.lund_boundaries)
                         pdf.savefig(fig)
                         plt.close(fig)
                 for fig in time_tables(trace, hadrons, plt, args.frame):
@@ -981,6 +1032,9 @@ def main() -> None:
     except (OSError, ValueError, KeyError) as error:
         parser.error(str(error))
     print(f"Saved {output} ({len(hadrons)} hadrons, {len(groups)} string/pass groups)")
+    if args.lund_boundaries:
+        print(f"Lund boundary overlay enabled: {len(geometry_groups)} group(s) with parameter-plane geometry; "
+              f"{len(groups) - len(geometry_groups)} group(s) without geometry.")
     for group in groups:
         _, reason = endpoint_curves(trace, group)
         if reason:
