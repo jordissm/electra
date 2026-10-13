@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Plot an eHIJING event_XXXXXXXX.fragmentation trace as a multipage PDF.
 
-Requires matplotlib. Version 3 also records the massless-reference parameter
+Requires matplotlib. Massive original endpoints of two-parton open strings are
+shown as constant-tension model curves, not as recorded PYTHIA histories.
+Version 3 also records the massless-reference parameter
 plane for longitudinal Lund constituent worldlines. Those are plotted separately
 from the saved vertices: transverse smearing/tunnelling and heavy-endpoint
 corrections do not define classical constituent paths through saved_vertex.
@@ -48,6 +50,25 @@ class Hadron:
 
 
 @dataclass
+class Parton:
+    index: int
+    pdg: int
+    name: str
+    role: str
+    vertex: Vertex
+    momentum: Vertex | None
+    mass: float | None = None
+
+
+@dataclass
+class EndpointCurve:
+    parton: Parton
+    mass: float
+    path: list[Vertex]
+    turn: Vertex
+
+
+@dataclass
 class Trace:
     event: int
     attempt: int
@@ -55,10 +76,11 @@ class Trace:
     vertices: bool
     hadrons: list[Hadron] = field(default_factory=list)
     strings: dict[Group, dict[str, str]] = field(default_factory=dict)
-    partons: dict[Group, list[tuple[int, int, Vertex]]] = field(default_factory=dict)
+    partons: dict[Group, list[Parton]] = field(default_factory=dict)
     primary: Vertex | None = None
     planes: dict[tuple[Group, str], Plane] = field(default_factory=dict)
     version: int = 2
+    kappa: float | None = None
 
 
 def fields(line: str) -> dict[str, str]:
@@ -116,6 +138,8 @@ class Plane:
         fixed = 1 - varying
         if abs(start[fixed] - end[fixed]) > 1e-9:
             raise ValueError("A constituent characteristic must hold one light-cone coordinate fixed")
+        if max(abs(a - b) for a, b in zip(start, end)) < 1e-9:
+            return [self.location(*start)]
         lo, hi = start[varying], end[varying]
         cuts = [lo] + [float(i) for i in range(math.floor(lo) + 1, math.ceil(hi))] + [hi]
         result = []
@@ -166,12 +190,13 @@ def read_trace(path: Path) -> Trace:
     records: list[tuple[str, Group, dict[str, str]]] = []
     current: dict[str, str] | None = None
     strings: dict[Group, dict[str, str]] = {}
-    partons: dict[Group, list[tuple[int, int, Vertex]]] = {}
+    partons: dict[Group, list[Parton]] = {}
     string_group: Group | None = None
     planes: dict[tuple[Group, str], Plane] = {}
     primary = None
     event = attempt = mode = None
     vertices = False
+    kappa = None
     version = ended = success = False
     with path.open(encoding="utf-8") as source:
         for raw in source:
@@ -187,6 +212,7 @@ def read_trace(path: Path) -> Trace:
                 settings = fields(line)
                 mode = int(settings["mode"])
                 vertices = settings.get("vertices") == "true"
+                kappa = time(settings.get("kappa_GeV_per_fm"))
             elif line == "End of fragmentation trace.":
                 ended = True
             match = PREFIX.match(line)
@@ -226,7 +252,10 @@ def read_trace(path: Path) -> Trace:
                 vertex = point(values.get("absolute_vertex"))
                 if vertex is not None:
                     partons.setdefault(string_group, []).append(
-                        (int(values["index"]), int(values["pdg"]), vertex))
+                        Parton(int(values["index"]), int(values["pdg"]),
+                               values.get("name", "").strip('"'), values.get("role", ""),
+                               vertex, point(values.get("momentum")),
+                               time(values.get("mass_GeV"))))
             elif line.startswith("PARTICLE "):
                 current = fields(line)
                 records.append(("particle", (-1, -1), current))
@@ -242,7 +271,7 @@ def read_trace(path: Path) -> Trace:
         raise ValueError("The trace is incomplete or does not describe a successful event")
 
     trace = Trace(event, attempt, mode, vertices, strings=strings, partons=partons,
-                  primary=primary, planes=planes, version=version)
+                  primary=primary, planes=planes, version=version, kappa=kappa)
     by_source: dict[tuple[Group, int], Hadron] = {}
     for kind, group, values in records:
         if kind != "hadron":
@@ -315,9 +344,87 @@ def group_name(group: Group) -> str:
     return f"Pass {group[0]}, string {group[1]}"
 
 
+def endpoint_curves(trace: Trace, group: Group) -> tuple[list[EndpointCurve], str]:
+    """First outward/return excursion of an ideal unbroken massive string.
+
+    In the input string CM frame, dp_parallel/dt = +/- kappa and
+    dz/dt = p_parallel/E. Integrating gives dz = (E(t)-E(0))/force.
+    Each clock starts at its recorded endpoint vertex. This is a diagnostic
+    model: pair creation, recoil exchange and differing endpoint birth origins
+    are not an evolution recorded by PYTHIA. No joining to saved F is imposed.
+    See Ferreres-Sole & Sjostrand, arXiv:1808.04619, eq. (17).
+    """
+    partons = trace.partons.get(group, [])
+    if trace.strings.get(group, {}).get("topology") != "open" or len(partons) != 2:
+        return [], "massive model requires a two-parton open string (no gluon kinks/junctions)"
+    endpoints = {p.role: p for p in partons}
+    if set(endpoints) != {"positive_endpoint", "negative_endpoint"}:
+        return [], "endpoint roles are missing"
+    if trace.kappa is None or trace.kappa <= 0:
+        return [], "positive string tension is missing"
+    total = point(trace.strings[group].get("momentum"))
+    if total is None or total[0] <= 0 or any(p.momentum is None for p in partons):
+        return [], "input endpoint/string momentum is missing"
+    beta = tuple(p / total[0] for p in total[1:])
+    try:
+        momenta = {role: boost(p.momentum, beta) for role, p in endpoints.items()}
+    except ValueError:
+        return [], "input string momentum is not timelike"
+    rest_total = boost(total, beta)
+    if max(abs(a - b) for a, b in zip(
+            add(momenta["positive_endpoint"], momenta["negative_endpoint"]), rest_total)) > 1e-7 * max(1., rest_total[0]):
+        return [], "input endpoint momenta do not sum to the recorded string momentum"
+    positive = momenta["positive_endpoint"]
+    magnitude = math.sqrt(sum(q * q for q in positive[1:]))
+    if magnitude < 1e-10:
+        return [], "input endpoints have no resolved outward momentum"
+    direction = tuple(q / magnitude for q in positive[1:])
+    inverse = tuple(-b for b in beta)
+    curves = []
+    for role, sign in (("positive_endpoint", 1), ("negative_endpoint", -1)):
+        parton, p = endpoints[role], momenta[role]
+        longitudinal = sum(q * n for q, n in zip(p[1:], direction))
+        transverse = tuple(q - longitudinal * n for q, n in zip(p[1:], direction))
+        if sign * longitudinal <= 0 or sum(q * q for q in transverse) > 1e-12 * max(1., magnitude ** 2):
+            return [], "input endpoint momenta are not back-to-back in the string CM frame"
+        invariant = p[0] ** 2 - sum(q * q for q in p[1:])
+        if p[0] <= 0 or invariant < -1e-8 * max(1., p[0] ** 2):
+            return [], "input endpoint is not an on-shell timelike/null state"
+        mass = math.sqrt(max(0., invariant))
+        if parton.mass is not None and abs(parton.mass ** 2 - invariant) > 1e-7 * max(1., p[0] ** 2):
+            return [], "recorded endpoint mass and momentum disagree"
+        force = -sign * trace.kappa
+        initial_energy = math.hypot(mass, longitudinal)
+        turning_time = abs(longitudinal) / trace.kappa
+        # Sample the turn exactly; stop on return to the initial longitudinal
+        # position. Continuing with the same force would not be a yo-yo cycle.
+        path = []
+        for step in range(201):
+            elapsed = 2 * turning_time * step / 200
+            q = longitudinal + force * elapsed
+            energy = math.hypot(mass, q)
+            displacement = (energy - initial_energy) / force
+            delta = (elapsed, *(displacement * n for n in direction))
+            path.append(add(parton.vertex, boost(delta, inverse)))
+        curves.append(EndpointCurve(parton, mass, path, path[100]))
+    return curves, ""
+
+
+def reference_origin(trace: Trace, hadron: Hadron) -> Vertex:
+    """Use one shared plotting origin per string/leg, not per hadron."""
+    endpoints = [p.vertex for p in trace.partons.get(hadron.group, [])
+                 if p.role in ("positive_endpoint", "negative_endpoint")]
+    origins = endpoints or list(dict.fromkeys(
+        h.origin for h in trace.hadrons
+        if h.group == hadron.group and h.branch == hadron.branch and h.origin is not None))
+    if not origins:
+        raise ValueError("No shared reference origin for this string leg")
+    return tuple(sum(v[i] for v in origins) / len(origins) for i in range(4))
+
+
 def reference_hadron(trace: Trace, hadron: Hadron):
     plane = trace.planes.get((hadron.group, hadron.branch))
-    if plane is None or hadron.break_indices is None or hadron.origin is None:
+    if plane is None or hadron.break_indices is None:
         raise ValueError("No parameter-plane record for this hadron")
     ia, ib = hadron.break_indices
     if ia not in plane.breaks or ib not in plane.breaks:
@@ -341,9 +448,41 @@ def reference_hadron(trace: Trace, hadron: Hadron):
         if max(abs(x) for x in plane.location(*start)) < 1e-7:
             paths.append(plane.path(start, uv))
     momentum = scale(add(scale(formation, 2), scale(add(first, second), -1)), plane.kappa)
-    return (add(hadron.origin, first), add(hadron.origin, second),
-            add(hadron.origin, formation), momentum,
-            [[add(hadron.origin, vertex) for vertex in path] for path in paths])
+    origin = reference_origin(trace, hadron)
+    return (add(origin, first), add(origin, second),
+            add(origin, formation), momentum,
+            [[add(origin, vertex) for vertex in path] for path in paths])
+
+
+def place_labels(fig, ax, reserved=()):
+    """Keep diagram labels inside the axes and avoid other labels/insets."""
+    fig.canvas.draw()
+    renderer = fig.canvas.get_renderer()
+    bounds = ax.get_window_extent(renderer)
+    occupied = [artist.get_window_extent(renderer) for artist in reserved]
+    for label in ax.texts:
+        if not hasattr(label, "xy"):
+            continue
+        original = label.get_position()
+        candidates = [original] + [(sx * radius, sy * radius)
+            for radius in (6, 12, 20, 30, 44, 60, 80)
+            for sx, sy in ((1, 1), (-1, 1), (1, -1), (-1, -1), (0, 1), (0, -1))]
+        best = None
+        for offset in candidates:
+            label.set_position(offset)
+            label.set_ha("right" if offset[0] < 0 else "left")
+            label.set_va("top" if offset[1] < 0 else "bottom")
+            box = label.get_window_extent(renderer).expanded(1.05, 1.15)
+            if bounds.contains(box.x0, box.y0) and bounds.contains(box.x1, box.y1):
+                if best is None:
+                    best = offset
+                if not any(box.overlaps(other) for other in occupied):
+                    best = offset
+                    break
+        label.set_position(best or original)
+        label.set_ha("right" if label.get_position()[0] < 0 else "left")
+        label.set_va("top" if label.get_position()[1] < 0 else "bottom")
+        occupied.append(label.get_window_extent(renderer).expanded(1.05, 1.15))
 
 
 def draw_diagram(trace, hadrons, axis, labels, title, colors, plt, Line2D,
@@ -391,9 +530,30 @@ def draw_diagram(trace, hadrons, axis, labels, title, colors, plt, Line2D,
                 "are not replaced by straight-line interpolation.\n"
                 f"Omitted hadrons: {skipped}", transform=ax.transAxes)
         return fig
+    models = {}
+    omitted_models = {}
+    if not longitudinal:
+        for group in groups:
+            curves, reason = endpoint_curves(trace, group)
+            if curves:
+                models[group] = curves
+            else:
+                omitted_models[group] = reason
     times = [position(row[3])[0] for row in data]
     primary_time = position(trace.primary)[0] if trace.primary is not None else min(times)
     end_time = max(times) + (duration if duration is not None else max(1., 0.25 * (max(times) - primary_time)))
+    for group, curves in models.items():
+        for curve in curves:
+            color = colors[group]
+            line(curve.path, color, linestyle="-.")
+            start, turn = position(curve.path[0]), position(curve.turn)
+            ax.plot(start[component], start[0], "D", color=color,
+                    markerfacecolor="none", markersize=5, zorder=4)
+            ax.plot(turn[component], turn[0], "^", color=color,
+                    markerfacecolor=color, markersize=5, zorder=4)
+            if labels:
+                ax.annotate(f"P{curve.parton.index}", (start[component], start[0]), xytext=(4, -12),
+                            textcoords="offset points", fontsize=7, color=color)
     seen_breakups = set()
     for hadron, first, second, formation, momentum, paths in data:
         color = colors[hadron.group]
@@ -453,6 +613,17 @@ def draw_diagram(trace, hadrons, axis, labels, title, colors, plt, Line2D,
     ]
     if longitudinal:
         handles.append(Line2D([], [], color="black", linestyle="-", label="Longitudinal constituent worldline"))
+    elif models:
+        handles.extend([
+            Line2D([], [], color="black", linestyle="-.", label="Massive endpoint (model)"),
+            Line2D([], [], color="black", marker="D", markerfacecolor="none", linestyle="none", label="Recorded endpoint start"),
+            Line2D([], [], color="black", marker="^", linestyle="none", label="Endpoint turn (model)"),
+        ])
+        if len(groups) == 1:
+            for curve in models[groups[0]]:
+                p = curve.parton
+                handles.append(Line2D([], [], color=colors[groups[0]], linestyle="-.",
+                    label=f"P{p.index}: {p.name or p.pdg}, m={curve.mass:.3g} GeV"))
     for group in groups:
         handles.append(Line2D([], [], color=colors[group], linewidth=2, label=group_name(group)))
     ax.legend(handles=handles, loc="upper left", bbox_to_anchor=(1.02, 1), fontsize=8)
@@ -462,21 +633,59 @@ def draw_diagram(trace, hadrons, axis, labels, title, colors, plt, Line2D,
     ax.grid(alpha=0.2)
     ax.margins(0.15)
     ax.set_title(title + f"\nEvent {trace.event}, attempt {trace.attempt}, mode {trace.mode}; frame: {frame}")
-    notes = "H = PYTHIA index; ID = OSCAR output_ID. Faded points: not exported.\n"
+    notes = "P/H = PYTHIA parton/hadron index; ID = OSCAR output_ID. Faded points: not exported.\n"
     if longitudinal:
         notes += "Classical longitudinal massless-reference Lund paths; transverse tunnelling/smearing and heavy-endpoint corrections excluded.\n"
         notes += "Formation points and hadron slopes on this page belong to the longitudinal reference picture."
+        notes += "\nShared reference origin: mean recorded endpoint vertex (or mean leg origin); saved metadata is unchanged."
         if skipped:
             notes += f"\n{skipped} hadron(s) omitted: missing/invalid parameter-plane path; no trajectory was interpolated."
     else:
         notes += "Recorded vertices; free hadron worldlines begin at saved formation points.\n"
-        notes += "Smeared breakup-to-formation segments do not define causal constituent paths; see the longitudinal pages."
+        if models:
+            notes += "Endpoint curves: unbroken constant-tension two-parton model, from each recorded start through its first turn and return.\n"
+            notes += "Force acts along the input CM momentum; distinct starting vertices are retained. Pair creation/recoil exchange are not modelled.\n"
+            notes += "Curves are not fitted to saved formation points; they are not full PYTHIA constituent histories."
+        if omitted_models:
+            notes += f"\nMassive model unavailable for {len(omitted_models)} string group(s); unsupported geometry or missing/invalid input."
     if not trace.vertices:
         notes += "\nVertex generation is OFF; saved coordinates may be default zeros."
     elif trace.mode != 2:
         notes += "\nThe saved vertex is not necessarily the late formation point in this mode."
     fig.text(0.06, 0.025, notes, fontsize=7)
     fig.subplots_adjust(left=0.08, right=0.70, bottom=0.18, top=0.88)
+    reserved = []
+    if len(models) == 1 and len(groups) == 1:
+        curves = models[groups[0]]
+        vertices = [position(v) for curve in curves for v in curve.path]
+        xmin, xmax = min(v[component] for v in vertices), max(v[component] for v in vertices)
+        tmin, tmax = min(v[0] for v in vertices), max(v[0] for v in vertices)
+        if tmax - tmin < 0.3 * (end_time - min(primary_time, tmin)):
+            detail = ax.inset_axes([0.06, 0.58, 0.40, 0.34])
+            color = colors[groups[0]]
+            for curve in curves:
+                values = [position(v) for v in curve.path]
+                detail.plot([v[component] for v in values], [v[0] for v in values],
+                            color=color, linestyle="-.", linewidth=1.1)
+                start, turn = position(curve.path[0]), position(curve.turn)
+                detail.plot(start[component], start[0], "D", color=color, markerfacecolor="none", markersize=4)
+                detail.plot(turn[component], turn[0], "^", color=color, markersize=4)
+                if labels:
+                    detail.annotate(f"P{curve.parton.index}", (start[component], start[0]), xytext=(4, -10),
+                                    textcoords="offset points", fontsize=7, color=color)
+            xpad, tpad = max(0.02, 0.3 * (xmax - xmin)), max(0.02, 0.3 * (tmax - tmin))
+            detail.set_xlim(xmin - xpad, xmax + xpad)
+            detail.set_ylim(tmin - tpad, tmax + tpad)
+            detail.set_aspect("equal", adjustable="box")
+            detail.set_xlabel(f"{axis} [fm]", fontsize=7)
+            detail.set_ylabel("t [fm/c]", fontsize=7)
+            detail.tick_params(labelsize=7)
+            detail.grid(alpha=0.2)
+            detail.set_title("Endpoint detail (same frame)", fontsize=8)
+            place_labels(fig, detail)
+            reserved.append(detail)
+    if labels:
+        place_labels(fig, ax, reserved)
     return fig
 
 
@@ -504,7 +713,7 @@ def time_tables(trace, hadrons, plt, frame="lab"):
             production = min(transformed_time(first), transformed_time(second)) if first is not None and second is not None else None
         rows.append([
             f"{hadron.group[0]}/{hadron.group[1]}" if hadron.group != (-1, -1) else "unassigned",
-            str(hadron.index), str(hadron.output_id) if hadron.output_id is not None else "—",
+            str(hadron.index), str(hadron.output_id) if hadron.output_id is not None else "-",
             f"{hadron.name or hadron.pdg} ({hadron.pdg})",
             f"{production:.8g}" if production is not None else "unavailable",
             f"{transformed_time(hadron.saved):.8g}", f"{transformed_time(final):.8g}",
@@ -513,7 +722,7 @@ def time_tables(trace, hadrons, plt, frame="lab"):
     for start in range(0, len(rows), 32):
         fig, ax = plt.subplots(figsize=(11.7, 8.3))
         ax.set_axis_off()
-        ax.set_title(f"Event {trace.event}: saved-particle times [fm/c], {frame} — {start + 1}–{min(start + 32, len(rows))}", pad=20)
+        ax.set_title(f"Event {trace.event}: saved-particle times [fm/c], {frame} - {start + 1}-{min(start + 32, len(rows))}", pad=20)
         page_rows = rows[start:start + 32]
         table = ax.table(cellText=page_rows, colLabels=headers, cellLoc="center",
                          colWidths=[0.13, 0.06, 0.09, 0.27, 0.15, 0.15, 0.15],
@@ -568,11 +777,12 @@ def main() -> None:
         groups = sorted({h.group for h in hadrons})
         if args.frame == "string-rest" and len(groups) != 1:
             raise ValueError("Use --string and --pass to select one string for --frame string-rest")
-        colors = {group: plt.get_cmap("tab20")(index % 20) for index, group in enumerate(groups)}
+        palette = plt.get_cmap("tab10" if len(groups) <= 10 else "tab20")
+        colors = {group: palette(index % palette.N) for index, group in enumerate(groups)}
         with PdfPages(output, metadata={"Title": f"eHIJING event {trace.event} fragmentation",
                                         "Subject": "Hadronization spacetime diagram"}) as pdf:
             fig = draw_diagram(trace, hadrons, args.axis, not args.no_labels,
-                               "Saved vertices and hadron worldlines", colors, plt, Line2D,
+                               "Saved vertices, massive endpoints and hadron worldlines", colors, plt, Line2D,
                                args.frame, args.duration)
             pdf.savefig(fig)
             plt.close(fig)
@@ -582,7 +792,7 @@ def main() -> None:
                     info = trace.strings.get(group, {})
                     title = group_name(group)
                     if info:
-                        title += f" — {info.get('branch', '')}, {info.get('topology', '')}, mass {float(info['mass_GeV']):.6g} GeV"
+                        title += f" - {info.get('branch', '')}, {info.get('topology', '')}, mass {float(info['mass_GeV']):.6g} GeV"
                     if len(groups) > 1:
                         fig = draw_diagram(trace, subset, args.axis, not args.no_labels,
                                            title, colors, plt, Line2D, args.frame, args.duration)
@@ -603,8 +813,12 @@ def main() -> None:
     except (OSError, ValueError, KeyError) as error:
         parser.error(str(error))
     print(f"Saved {output} ({len(hadrons)} hadrons, {len(groups)} string/pass groups)")
+    for group in groups:
+        _, reason = endpoint_curves(trace, group)
+        if reason:
+            print(f"{group_name(group)}: massive endpoint model omitted: {reason}")
     if not trace.planes:
-        print("Constituent worldlines require new v3 traces; this file only supports hadron worldlines.")
+        print("No parameter plane: massless breakup-constituent paths require a v3 trace; massive input endpoint curves use v2/v3 parton records.")
 
 
 if __name__ == "__main__":

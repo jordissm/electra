@@ -31,7 +31,7 @@ PartonVertex:ProtonRadius = 0.85
 PartonVertex:EmissionWidth = 0.1
 Fragmentation:setVertices = on
 HadronVertex:mode = 2
-HadronVertex:smearOn = on
+HadronVertex:smearOn = off
 HadronVertex:xySmear = 0.7
 HadronVertex:trace = on
 

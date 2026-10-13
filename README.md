@@ -84,7 +84,7 @@ Plot one trace with Python 3.10+ and matplotlib:
 python3 utils/plot_fragmentation.py /path/to/event_00000000.fragmentation
 ```
 
-This saves `event_00000000.pdf` with saved vertices and outgoing hadron worldlines,
+This saves `event_00000000.pdf` with saved vertices, massive input endpoint curves and outgoing hadron worldlines,
 diagrams for each string/pass, longitudinal Lund constituent pages for v3
 records, and hadron time tables. Breakups are solid green circles, formations
 solid purple circles, and the primary vertex a yellow star. Options include
@@ -95,7 +95,28 @@ Hadron worldlines use `dx/dt = p/E` from saved formation points before OSCAR
 smearing. Separate constituent pages use the longitudinal massless-reference
 string picture, excluding transverse tunnelling/smearing and heavy-endpoint
 corrections; their formation points can differ from the saved vertices.
-Regenerate old v2 traces after rebuilding eHIJING/PYTHIA for constituent paths.
+The saved-vertex pages also show both massive original endpoints of two-parton
+open strings, including one-hadron collapses. Dash-dot curves use the input
+momenta, masses and recorded starting vertices with a constant force
+`dp_parallel/dt = +/- kappa` in the input string rest frame, then boost back
+to the selected plot frame. Diamonds mark recorded starts and triangles model
+turns. Each curve stops after its first outward-and-return excursion.
+Individual string pages add a close-up when endpoint motion is small compared
+with the formation-time scale; labels are spaced to avoid overlapping.
+This is an unbroken-string reconstruction, not a recorded PYTHIA history:
+pair creation and collapse recoil exchange are excluded, and curves are not
+forced to meet at saved formation points. Distinct endpoint birth vertices
+are retained; assuming a separate force clock at each birth is a diagnostic
+approximation. Gluon kinks, junctions and invalid/missing inputs are reported
+as unsupported for this massive model. Old v2/v3 files with parton momenta
+already support it; new traces additionally record endpoint masses explicitly.
+
+The separate massless-reference pages use one shared mean endpoint vertex
+(or mean leg origin) per string/leg, so adjacent paths join. This is a plotting
+anchor, not a change to saved vertices. Regenerate v2 traces after rebuilding
+eHIJING/PYTHIA for the parameter-plane paths of newly created constituents.
+The massive model follows the straight-string equation of motion in
+[Ferreres-Solé and Sjöstrand, Eq. (17)](https://arxiv.org/html/1808.04619v2#S2.SS2.SSS5).
 
 ## Citation
 
