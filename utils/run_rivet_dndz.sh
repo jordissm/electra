@@ -101,8 +101,8 @@ if [[ -n "$PT2_MIN" || -n "$PT2_MAX" ]]; then
     echo "ERROR: PT2_MIN/PT2_MAX must be numbers (got '$PT2_MIN' '$PT2_MAX')" >&2
     exit 1
   fi
-  if awk "BEGIN{exit !($PT2_MAX < $PT2_MIN)}"; then
-    echo "ERROR: PT2_MAX < PT2_MIN ($PT2_MAX < $PT2_MIN)" >&2
+  if awk "BEGIN{exit !($PT2_MAX <= $PT2_MIN)}"; then
+    echo "ERROR: PT2_MAX <= PT2_MIN ($PT2_MAX <= $PT2_MIN)" >&2
     exit 1
   fi
   USE_PT2=1
@@ -215,7 +215,6 @@ while IFS= read -r PROFILE_NAME; do
     [[ -z "$EVT_TAG" ]] && EVT_TAG="evt_unknown"
 
     YODA_ONE="${TMPDIR}/${PROFILE_NAME}_${EVT_TAG}.yoda"
-    YODA_LIST+=("${YODA_ONE}")
 
     echo "-> ${EVT_TAG}: ${F}"
     echo "   RIVET_HEPMC_PATH=\"${F}\" ${RIVET_BIN} --ignore-beams -a \"${ANA}\" --pwd --analysis-path \"${ANA_PATH}\" -o \"${YODA_ONE}\" \"${F}\""
@@ -229,6 +228,7 @@ while IFS= read -r PROFILE_NAME; do
         -o "${YODA_ONE}" \
         "${F}"; then
       ((n_ok++)) || true
+      YODA_LIST+=("${YODA_ONE}")
     else
       echo "WARNING: rivet failed for file: ${F}" >&2
       ((n_fail++)) || true
