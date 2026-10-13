@@ -40,7 +40,7 @@ jobs:
           platforms: linux/amd64
           push: true
           provenance: false
-          no-cache-filters: smash-build,ehijing-install,final-image
+          no-cache-filters: ehijing-install,final-image
           tags: |
             ${{ env.IMAGE_NAME }}:amd64
           labels: |
@@ -76,7 +76,7 @@ jobs:
           platforms: linux/arm64
           push: true
           provenance: false
-          no-cache-filters: smash-build,ehijing-install,final-image
+          no-cache-filters: ehijing-install,final-image
           tags: |
             ${{ env.IMAGE_NAME }}:arm64
           labels: |
