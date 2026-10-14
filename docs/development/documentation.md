@@ -48,6 +48,11 @@ MyST `graphviz` directive, so Sphinx and standalone Doxygen render the same
 diagram. HTML uses scalable SVG; keep this single diagram source alongside
 the physics text when the execution flow changes.
 
+The assumptions review is maintained in `src/ehijing/docs/assumptions.md` and
+adapted into its own manual page. For an older pinned component revision that
+does not contain that file, the manual displays an availability notice rather
+than presenting a review of a different implementation.
+
 ## LaTeX mathematics
 
 MyST supports inline math such as `$Q^2$` and display math enclosed in `$$`.

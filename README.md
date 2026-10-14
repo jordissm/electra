@@ -5,7 +5,11 @@
 <img src="utils/banner.png" alt="banner" width="550"/>
 </p>
 
-(ELectron-ion Event Collision TRAnsport) simulation framework designed specifically for modeling electron-ion collision events. Leveraging [eHIJING](https://doi.org/10.1103/PhysRevD.110.034001) for initial collision event generation and [SMASH](https://smash-transport.github.io) for subsequent hadronic transport. For physics details, please refer to [arXiv:2601:XXXXX](https://www.arxiv.org/abs/2601.XXXXX).
+ELECTRA (ELectron-ion Event generation Coupled to TRAnsport) is a simulation
+framework for electron-ion collisions. It couples
+[eHIJING](https://doi.org/10.1103/PhysRevD.110.034001) event generation to
+[SMASH](https://smash-transport.github.io) hadronic transport. For physics details,
+please refer to [arXiv:2601:XXXXX](https://www.arxiv.org/abs/2601.XXXXX).
 
 ## Overview
 

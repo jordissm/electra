@@ -28,8 +28,13 @@ def myst_text(text: str) -> str:
     text = text.replace(r"\f[", "$$").replace(r"\f]", "$$")
     text = text.replace(r"\[", "$$").replace(r"\]", "$$")
     text = text.replace("# Unit conventions {#unit_conventions}", "(unit-conventions)=\n# Unit conventions")
+    text = text.replace(
+        "# Physical assumptions and open questions {#physics_assumptions}",
+        "(physics-assumptions)=\n# Physical assumptions and open questions",
+    )
     text = text.replace("@ref unit_conventions", "[unit conventions](units.md)")
     text = text.replace("(docs/units.md)", "(units.md)")
+    text = text.replace("(mainpage.md", "(ehijing.md")
     return text
 
 
@@ -55,6 +60,20 @@ def prepare_sources(root: Path, docs: Path) -> None:
     write_if_changed(destination / "units.md", myst_text((source / "docs" / "units.md").read_text()))
     overview = (source / "docs" / "mainpage.md").read_text().split("## Generating The HTML", 1)[0]
     write_if_changed(destination / "ehijing.md", myst_text(overview))
+    assumptions = source / "docs" / "assumptions.md"
+    if assumptions.is_file():
+        assumptions_text = myst_text(assumptions.read_text(encoding="utf-8"))
+    else:
+        # Older pinned component revisions do not contain the audit page.
+        assumptions_text = """# Physical assumptions and open questions
+
+This checked-out eHIJING revision does not include the assumptions review.
+See the [component manual](ehijing.md) and [unit conventions](units.md) for
+the documentation supplied by that revision. The full review becomes available
+when the component checkout includes `docs/assumptions.md`; CI uses the revision
+recorded in `docs/ehijing-revision.txt`.
+"""
+    write_if_changed(destination / "assumptions.md", assumptions_text)
     from electra.cli import build_parser
 
     parser = build_parser()

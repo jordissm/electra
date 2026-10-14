@@ -1,7 +1,7 @@
 # ELECTRA
 
-ELECTRA (ELectron-ion Event Collision TRAnsport) combines eHIJING event
-generation with SMASH hadronic transport for electron-ion collision studies.
+ELECTRA (ELectron-ion Event generation Coupled to TRAnsport) combines eHIJING
+event generation with SMASH hadronic transport for electron-ion collision studies.
 The Python CLI connects the stages; containers package the physics dependencies
 and utilities for local and SLURM execution.
 
@@ -27,6 +27,7 @@ analysis/rivet
 :caption: Physics and interfaces
 
 _generated/ehijing
+_generated/assumptions
 _generated/nuclear-target
 _generated/units
 _generated/history

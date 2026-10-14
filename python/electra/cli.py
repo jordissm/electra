@@ -1,5 +1,7 @@
 """
-ELECTRA: eHIJING → SMASH orchestration CLI
+ELECTRA: ELectron-ion Event generation Coupled to TRAnsport
+
+Orchestration CLI for eHIJING event generation and SMASH hadronic transport.
 
 Design principles:
 - Filesystem is the database
@@ -527,7 +529,10 @@ def cmd_smash(args: argparse.Namespace) -> None:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="electra")
+    p = argparse.ArgumentParser(
+        prog="electra",
+        description="ELECTRA: ELectron-ion Event generation Coupled to TRAnsport",
+    )
     sp = p.add_subparsers(dest="cmd", required=True)
 
     # eHIJING

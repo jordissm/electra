@@ -80,7 +80,7 @@ LABEL installed.software.versions="\
 LABEL org.opencontainers.image.title="electra"
 LABEL org.opencontainers.image.authors="SURGE Collaboration"
 LABEL org.opencontainers.image.source="https://github.com/jordissm/electra"
-LABEL org.opencontainers.image.description="ELECTRA: eHIJING + SMASH cold nuclear medium framework"
+LABEL org.opencontainers.image.description="ELECTRA: ELectron-ion Event generation Coupled to TRAnsport"
 LABEL org.opencontainers.image.licenses="GPL-3.0"
 
 # =======================================================
