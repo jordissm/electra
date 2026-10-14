@@ -55,6 +55,13 @@ adapted into its own manual page. For an older component checkout that
 does not contain that file, the manual displays an availability notice rather
 than presenting a review of a different implementation.
 
+The seed policy is maintained in the `Reproducibility and seeds` section of
+`src/ehijing/README.md` and adapted into `_generated/reproducibility.md` as a
+separate manual page. Keep it separate from the fragmentation guide when editing
+the section boundaries. The adapter shows an availability notice when an older
+component checkout lacks that section. CLI, configuration and output pages link
+to this single stream inventory and derivation.
+
 ## LaTeX mathematics
 
 MyST supports inline math such as `$Q^2$` and display math enclosed in `$$`.

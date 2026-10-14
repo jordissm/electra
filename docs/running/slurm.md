@@ -8,7 +8,7 @@ and host output directory before submitting jobs.
 
 ```bash
 bash slurm-scripts/ehijing_submit.sh \
-  EXPERIMENT=hermes NEVENTS=1000 CHUNK_SIZE=100
+  EXPERIMENT=hermes NEVENTS=1000 CHUNK_SIZE=100 SEED=12345
 ```
 
 `EXPERIMENT` is required and selects a directory under
@@ -28,6 +28,11 @@ environment values; inspect that section before using a different target/model.
 Optional shared-target controls are passed through using `NUCLEAR_TARGET`,
 `NUCLEON_WIDTH_FM`, `NUCLEAR_RADIUS_FM` and `NUCLEAR_SURFACE_FM`.
 
+`SEED` is forwarded unchanged to every array task. Its default is `12345` for
+eHIJING and `98765` for SMASH. Keep eHIJING chunk starts fixed for replay; SLURM
+job IDs and execution order do not enter derivation. See the [seed and resume
+contract](local.md#reproducibility-and-resuming).
+
 ## Submit transport
 
 Wait for generation to finish. Prepare the profile index and compatible SMASH
@@ -39,7 +44,7 @@ bash slurm-scripts/smash_submit.sh \
   RUN_DIR=/absolute/path/to/output/runs/0 \
   CONFIG_FILE=/absolute/path/to/output/runs/0/smash-config.yaml \
   PROFILES=/absolute/path/to/output/runs/0/profiles/profiles.jsonl \
-  NEVENTS=1000 CHUNK_SIZE=100 NREPLICAS=1 NPROFILES=1
+  NEVENTS=1000 CHUNK_SIZE=100 NREPLICAS=1 NPROFILES=1 SEED=98765
 ```
 
 Replace the absolute paths and run ID with those for your run. Files must be

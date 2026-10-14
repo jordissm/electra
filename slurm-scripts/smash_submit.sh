@@ -46,6 +46,16 @@ RUN_DIR_CONT="${RUN_DIR_CONT:-/workspace/output}"
 CONFIG_FILE="${CONFIG_FILE:-$PROJECT_ROOT/input/smash/config_files/config.yaml}"
 PROFILES="${PROFILES:-$PROJECT_ROOT/input/smash/profiles/profiles.jsonl}"
 
+SEED="${SEED:-98765}"
+if ! [[ "$SEED" =~ ^[0-9]+$ ]]; then
+    echo "Error: SEED must be an unsigned decimal integer" >&2; exit 1
+fi
+# Normalize leading zeros and check the uint64 limit without shell arithmetic.
+while [[ ${#SEED} -gt 1 && ${SEED:0:1} == 0 ]]; do SEED="${SEED:1}"; done
+if [[ ${#SEED} -gt 20 || ( ${#SEED} -eq 20 && "$SEED" > "18446744073709551615" ) ]]; then
+    echo "Error: SEED must fit in an unsigned 64-bit integer" >&2; exit 1
+fi
+
 NEVENTS="${NEVENTS:-1000}"
 CHUNK_SIZE="${CHUNK_SIZE:-1000}"
 NREPLICAS="${NREPLICAS:-1000}"
@@ -141,6 +151,7 @@ for TASK_ID in \$(seq 0 \$((NTASKS - 1))); do
         /bin/bash --noprofile --norc -lc "
             set -euo pipefail
             electra smash run \
+            --seed ${SEED} \
                 --run-dir \${RUN_DIR} \
                 --config-file \${CONFIG_FILE} \
                 --profiles-index \${PROFILES} \

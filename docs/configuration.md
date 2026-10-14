@@ -31,6 +31,21 @@ The [CLI reference](reference/cli.md) is generated from the current Python
 argument parser. The wrapper forwards event counts, IDs, seeds, medium mode,
 `K`, target species, tabulation directory and the three settings paths to eHIJING.
 
+`--seed` is an unsigned 64-bit ELECTRA master seed, from `0` through
+`18446744073709551615`. The Python defaults are `12345` for generation and
+`98765` for transport. The wrapper passes the generation master unchanged;
+eHIJING derives separate engine seeds from the master and chunk starting ID.
+PYTHIA receives values in `[1, 900000000]` and other engines receive explicit
+seeds. Master zero is deterministic and does not select PYTHIA's time-based seed.
+
+The driver and hadronizer override `Random:setSeed` and `Random:seed` after
+reading their respective settings files. Editing those settings therefore does
+not choose the effective seeds; use the CLI master seed. The bundled integration
+also sets `eHIJING:SeedContext` and `eHIJING:SeedRole` for the medium streams.
+These are internal policy inputs supplied by the application. See the
+[seed policy and stream inventory](_generated/reproducibility.md) and the
+[resume contract](running/local.md#reproducibility-and-resuming).
+
 `--history`, `--nuclear-target`, `--nucleon-width-fm`, `--nuclear-radius-fm`
 and `--nuclear-surface-fm` are forwarded only when explicitly supplied.
 Omitting them leaves the executable's defaults in force, including when using

@@ -18,6 +18,8 @@ import hashlib
 import json
 import subprocess
 import sys
+import shutil
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -36,11 +38,72 @@ def atomic_done_marker(path: Path) -> None:
     tmp.rename(path)
 
 
+SEED_POLICY = "electra-seeds-v1"
+
+
+def master_seed(value: str) -> int:
+    if not value or not value.isascii() or not value.isdecimal():
+        raise argparse.ArgumentTypeError("seed must be an unsigned 64-bit decimal integer")
+    number = int(value)
+    if number > (1 << 64) - 1:
+        raise argparse.ArgumentTypeError("seed must be an unsigned 64-bit decimal integer")
+    return number
+
+
 def hash_seed(*items: Any, bits: int = 63) -> int:
-    h = hashlib.sha256()
-    for it in items:
-        h.update(str(it).encode())
-    return int(h.hexdigest(), 16) & ((1 << bits) - 1)
+    """Hash a canonical JSON tuple; field boundaries and types are significant."""
+    data = json.dumps([SEED_POLICY, *items], ensure_ascii=True, separators=(",", ":"))
+    return int.from_bytes(hashlib.sha256(data.encode("ascii")).digest(), "big") & ((1 << bits) - 1)
+
+
+def file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as source:
+        for block in iter(lambda: source.read(1 << 20), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def table_digests(table_path: Path, mode: int) -> Dict[str, str]:
+    # GHT is created only when the high-scale medium is enabled in settings.
+    # A missing previously recorded table still fails the resume comparison.
+    names = ["Qs.dat"]
+    if mode == 1 and (table_path / "GHT.dat").exists():
+        names.append("GHT.dat")
+    return {name: file_sha256(table_path / name) for name in names}
+
+
+@lru_cache(maxsize=8)
+def _executable_sha256(path: str, modified_ns: int, size: int) -> str:
+    # Many SMASH tasks share one executable; invalidate on file changes.
+    return file_sha256(Path(path))
+
+
+def executable_digest(name: str) -> str:
+    executable = shutil.which(name)
+    if executable is None:
+        raise FileNotFoundError(f"Executable not found on PATH: {name}")
+    path = Path(executable).resolve()
+    stat = path.stat()
+    return _executable_sha256(str(path), stat.st_mtime_ns, stat.st_size)
+
+
+def completed_request(done: Path, provenance: Path, request: Dict[str, Any],
+                      tables: Optional[Dict[str, str]] = None) -> bool:
+    if not done.exists():
+        return False
+    if not provenance.exists():
+        raise ValueError(f"Completed output has no seed provenance: {done}; use a new run directory")
+    stored = json.loads(provenance.read_text(encoding="utf-8"))
+    if stored["request"] != request or (tables is not None and stored["tables_sha256"] != tables):
+        raise ValueError(f"Completed output has different seeds, settings, executable or tables: {done}; use a new run directory")
+    return True
+
+
+def save_provenance(path: Path, value: Dict[str, Any]) -> None:
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_text(json.dumps(value, sort_keys=True) + "\n", encoding="utf-8")
+    temporary.replace(path)
 
 
 def parse_event_id_from_path(event_file: Path) -> int:
@@ -181,15 +244,36 @@ def ehijing_task(
 
     # Optional chunk-level done marker
     chunk_done = events_dir / f".chunk_{first_event_id:08d}_{nevents}.done"
-    if chunk_done.exists():
-        return
+    chunk_provenance = chunk_done.with_suffix(".provenance.json")
+    request = {
+        "seed_policy": SEED_POLICY, "master_seed": str(base_seed),
+        "first_event_id": first_event_id, "number_of_events": nevents,
+        "chunk_size": chunk_size if chunk_size is not None else nevents,
+        "Z": Z, "A": A, "mode": mode, "K": K,
+        "settings_sha256": {"hard_process": file_sha256(config_file),
+                            "hadronization": file_sha256(hadronization_config_file),
+                            "dis_cuts": file_sha256(dis_cuts_config_file)},
+        "executable_sha256": executable_digest("ehijing"),
+        "history": history, "nuclear_target": nuclear_target,
+        "nucleon_width_fm": nucleon_width_fm,
+        "nuclear_radius_fm": nuclear_radius_fm, "nuclear_surface_fm": nuclear_surface_fm,
+    }
+    # Different event counts produce different marker names, but may overlap
+    # already completed records. Validate those too before launching a writer.
+    for existing in events_dir.glob(".chunk_*_*.done"):
+        _, first, count = existing.stem.lstrip(".").split("_")
+        if max(first_event_id, int(first)) >= min(first_event_id + nevents, int(first) + int(count)):
+            continue
+        same = completed_request(existing, existing.with_suffix(".provenance.json"), request,
+                                 table_digests(Path(table_path), mode))
+        if same:
+            return
 
     # Ensure tables + events dirs exist (fixes your earlier filesystem error)
     mkdir(Path(table_path))
 
-    # Seed handling: derive a deterministic Pythia seed for this chunk.
-    PYTHIA_SEED_MAX = 900_000_000  # Pythia8 allowed max
-    seed = 1 + (hash_seed(base_seed, first_event_id, nevents) % PYTHIA_SEED_MAX)
+    # The executable owns chunk/stream derivation and engine-specific conversion.
+    seed = base_seed
 
     # Run one triggered event per call, and write into the events directory.
     # NOTE: table_path is a directory; config_file is the .setting file.
@@ -231,13 +315,26 @@ def ehijing_task(
             cmd.extend([flag, str(value)])
     run(cmd)
 
-    atomic_done_marker(chunk_done)
+    metadata_files = list(events_dir.rglob(f"event_{first_event_id:08d}.meta.json"))
+    if len(metadata_files) != 1:
+        raise ValueError("Expected one first-event metadata record from seeded eHIJING")
+    effective = json.loads(metadata_files[0].read_text(encoding="utf-8"))["reproducibility"]
+    if (effective["policy"] != SEED_POLICY or effective["master_seed"] != str(base_seed)
+            or effective["first_event_id"] != first_event_id):
+        raise ValueError("eHIJING seed provenance does not match the requested chunk")
+    tables = table_digests(Path(table_path), mode)
+    provenance = {"request": request, "tables_sha256": tables}
+    save_provenance(chunk_provenance, provenance)
 
     record = {
         "first_event_id": first_event_id,
         "number_of_events": nevents,
         "chunk_size": chunk_size,
-        "ehijing_seed": seed,
+        "ehijing_seed": seed,  # Seed passed to the executable (master, since v1).
+        "master_seed": str(base_seed), "seed_policy": SEED_POLICY,
+        "effective_seeds": effective["streams"],
+        "settings_sha256": request["settings_sha256"],
+        "executable_sha256": request["executable_sha256"], "tables_sha256": tables,
         "Z": Z,
         "A": A,
         "medium_modification_mode": mode,
@@ -256,6 +353,7 @@ def ehijing_task(
 
     with layout["manifest"].open("a", encoding="utf-8") as f:
         f.write(json.dumps(record) + "\n")
+    atomic_done_marker(chunk_done)
 
 
 # -----------------------------------------------------------------------------
@@ -290,9 +388,6 @@ def smash_physical_event_task(
     out_dir = shard_dir / event_tag / f"profile_{profile_id}"
     done = out_dir / ".done"
 
-    if done.exists():
-        return
-
     mkdir(out_dir)
 
     cfg = cfg_path.resolve()
@@ -306,7 +401,17 @@ def smash_physical_event_task(
         )
 
     # Deterministic seed per (physical event, profile)
-    smash_seed = hash_seed(base_seed, event_tag, profile_id)
+    smash_seed = hash_seed("smash", base_seed, event_tag, profile_id)
+    request = {
+        "seed_policy": SEED_POLICY, "master_seed": str(base_seed),
+        "smash_seed": smash_seed, "event_id": event_id, "profile_id": profile_id,
+        "nreplicas": nreplicas, "event_sha256": file_sha256(event_file),
+        "config_sha256": file_sha256(cfg), "profile_sha256": file_sha256(profile_path),
+        "executable_sha256": executable_digest("smash"),
+    }
+    provenance = out_dir / "seed_provenance.json"
+    if completed_request(done, provenance, request):
+        return
 
     cmd = [
         "smash",
@@ -337,6 +442,7 @@ def smash_physical_event_task(
     ]
 
     run(cmd, cwd=out_dir)
+    save_provenance(provenance, {"request": request})
     atomic_done_marker(done)
 
 
@@ -545,7 +651,8 @@ def build_parser() -> argparse.ArgumentParser:
     per.add_argument("--K", type=float, default=4.0)
     per.add_argument("--run-path", required=True)
     per.add_argument("--number-of-events", type=int, required=True)
-    per.add_argument("--seed", type=int, default=12345)
+    per.add_argument("--seed", type=master_seed, default=12345,
+                     help="Unsigned 64-bit master seed; derived per stream by electra-seeds-v1")
     per.add_argument(
         "--history", choices=("on", "off"), default=None,
         help="HepMC3 ASCII spacetime history (new eHIJING builds default to off)",
@@ -597,7 +704,8 @@ def build_parser() -> argparse.ArgumentParser:
     psr.add_argument("--config-file", required=True, help="Universal SMASH config.yaml")
     psr.add_argument("--nevents", type=int, required=True)
     psr.add_argument("--nreplicas", type=int, required=True)
-    psr.add_argument("--seed", type=int, default=98765)
+    psr.add_argument("--seed", type=master_seed, default=98765,
+                     help="Unsigned 64-bit master seed; SMASH receives a derived nonnegative 63-bit seed")
     psr.add_argument("--profiles-index", required=True, help="Path to profiles.jsonl")
     psr.add_argument(
         "--nprofiles",

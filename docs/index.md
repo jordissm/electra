@@ -26,8 +26,10 @@ analysis/rivet
 :maxdepth: 2
 :caption: Physics and interfaces
 
+_generated/physics-tutorial
 _generated/ehijing
 _generated/assumptions
+_generated/reproducibility
 _generated/nuclear-target
 _generated/units
 _generated/history

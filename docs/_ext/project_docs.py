@@ -35,6 +35,7 @@ def myst_text(text: str) -> str:
     text = text.replace("@ref unit_conventions", "[unit conventions](units.md)")
     text = text.replace("(docs/units.md)", "(units.md)")
     text = text.replace("(mainpage.md", "(ehijing.md")
+    text = text.replace("(../README.md#reproducibility-and-seeds)", "(reproducibility.md)")
     return text
 
 
@@ -46,10 +47,12 @@ def prepare_sources(root: Path, docs: Path) -> None:
             "See docs/README.md for the component checkout instructions."
         )
     readme = (source / "README.md").read_text(encoding="utf-8")
+    seed_heading = "## Reproducibility and seeds\n"
+    fragmentation_end = "Reproducibility and seeds" if seed_heading in readme else "Generating documentation"
     sections = [
         ("nuclear-target", "Shared nuclear target and recoil", "Diagnostic spacetime history"),
         ("history", "Diagnostic spacetime history", "Hadronization spacetime trace"),
-        ("fragmentation", "Hadronization spacetime trace", "Generating documentation"),
+        ("fragmentation", "Hadronization spacetime trace", fragmentation_end),
     ]
     destination = docs / "_generated"
     for name, start, end in sections:
@@ -57,9 +60,34 @@ def prepare_sources(root: Path, docs: Path) -> None:
         # Promote section headings while retaining the component's text.
         text = re.sub(r"^(#{2,}) ", lambda match: match[1][1:] + " ", text, flags=re.MULTILINE)
         write_if_changed(destination / f"{name}.md", myst_text(f"# {start}\n" + text))
+    if seed_heading in readme:
+        seed_text = readme.split(seed_heading, 1)[1].split("## Generating documentation\n", 1)[0]
+        seed_text = myst_text("# Reproducibility and seeds\n" + seed_text)
+    else:
+        seed_text = """# Reproducibility and seeds
+
+This checked-out eHIJING revision does not document `electra-seeds-v1`.
+The current wrapper's master-seed contract requires the matching rebuilt
+eHIJING application and modified PYTHIA library/XML settings. See the
+[local replay and resume contract](../running/local.md#reproducibility-and-resuming).
+"""
+    write_if_changed(destination / "reproducibility.md", seed_text)
     write_if_changed(destination / "units.md", myst_text((source / "docs" / "units.md").read_text()))
     overview = (source / "docs" / "mainpage.md").read_text().split("## Generating The HTML", 1)[0]
     write_if_changed(destination / "ehijing.md", myst_text(overview))
+    tutorial = source / "docs" / "physics-tutorial.md"
+    if tutorial.is_file():
+        tutorial_text = myst_text(tutorial.read_text(encoding="utf-8"))
+    else:
+        tutorial_text = """# Learning the physics of eHIJING
+
+This checked-out eHIJING revision does not include the graduate physics tutorial.
+See the [physics manual](ehijing.md) and [assumptions review](assumptions.md)
+for the documentation available in this revision. The tutorial is maintained
+in the component's `docs/physics-tutorial.md`; build with a component revision
+containing that file to read it here.
+"""
+    write_if_changed(destination / "physics-tutorial.md", tutorial_text)
     assumptions = source / "docs" / "assumptions.md"
     if assumptions.is_file():
         assumptions_text = myst_text(assumptions.read_text(encoding="utf-8"))

@@ -20,7 +20,7 @@ This repository provides a framework to simulate electron-ion collision events f
 - *Event generation with eHIJING:* Medium-modified QCD splitting functions within the higher-twist (HT) and generalized higher-twist (GHT) frameworks are utilized to simulate parton showering in the nuclear medium that takes into account the non-Abelian Landau-Pomeranchuck-Midgal interference effect.
 - *Hadronic transport with SMASH:* Hadronic interaction between jet and nucleus are handled utilizing SMASH with custom cross section scaling factors depending on formation time.
 - *Modular design:* A flexible pipeline that allows to access intermediate output files.
-- *Containerized deployment:* Dependencies and utilities, as well as the orchestrator scripts are shipped on a Docker/Apptainer container to bypass installation steps and guarantee reproducibility.
+- *Containerized deployment:* Dependencies, utilities and orchestration scripts are shipped in a Docker/Apptainer container to simplify installation and retain the software environment used for a run.
 - *Continous Integration / Continous Delivery (CI/CD):* Container images are built pushed to the registry after every commit, facilitating access to the newest stable version.
 
 ## Quick Start
@@ -38,7 +38,7 @@ curl -fsSL https://raw.githubusercontent.com/jordissm/electra/main/install.sh -o
 1. Execute `ehijing` using the SLURM script provided:
 
 ```terminal
-bash slurm-scripts/ehijing_submit.sh EXPERIMENT=hermes NEVENTS=<NEVENTS> CHUNK_SIZE=<CHUNK_SIZE>
+bash slurm-scripts/ehijing_submit.sh EXPERIMENT=hermes NEVENTS=<NEVENTS> CHUNK_SIZE=<CHUNK_SIZE> SEED=12345
 ```
 
 where `<NEVENTS>` should be an integer between `1` and `1_000_000` and `<CHUNK_SIZE>` should be an integer between `1` and `<NEVENTS>`.
@@ -49,7 +49,7 @@ where `<NEVENTS>` should be an integer between `1` and `1_000_000` and `<CHUNK_S
 
 ```terminal
 bash slurm-scripts/smash_submit.sh RUN_DIR=<RUN_DIR> CONFIG_FILE=<CONFIG_FILE> PROFILES=<PROFILES_INDEX> \
-  NEVENTS=<NEVENTS> CHUNK_SIZE=<CHUNK_SIZE>
+  NEVENTS=<NEVENTS> CHUNK_SIZE=<CHUNK_SIZE> SEED=98765
 ```
 
 where `<NEVENTS>` need to match the same number used for eHIJING but `<CHUNK_SIZE>` needs not.
@@ -69,6 +69,17 @@ curl -fsSL https://raw.githubusercontent.com/jordissm/electra/main/install.sh -o
 The installer copies packaged utilities into `<prefix>/utils` on both local and
 cluster installs. Use `--utils <dir>` to choose another directory. Re-running
 the installer adds missing files and preserves existing utility files.
+
+`--seed` (or SLURM `SEED`) is an unsigned 64-bit ELECTRA master seed in
+`[0, 18446744073709551615]`; zero is reproducible. Defaults are `12345` for
+eHIJING and `98765` for SMASH. The `electra-seeds-v1` policy provides replay for
+fixed eHIJING chunk starts with identical inputs, build and runtime environment.
+Completed tasks validate saved request fingerprints before skipping work.
+See the [seed and replay contract](docs/_generated/reproducibility.md) and
+[local resume guidance](docs/running/local.md#reproducibility-and-resuming).
+Rebuild the bundled modified PYTHIA library/XML settings and eHIJING when
+adopting this policy; it changes historical samples, whose original binaries
+and records must be retained for replay.
 
 ### Documentation
 
