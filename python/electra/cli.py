@@ -163,6 +163,10 @@ def ehijing_task(
     hadronization_config_file: Path,
     dis_cuts_config_file: Path,
     history: Optional[str] = None,
+    nuclear_target: Optional[str] = None,
+    nucleon_width_fm: Optional[float] = None,
+    nuclear_radius_fm: Optional[float] = None,
+    nuclear_surface_fm: Optional[float] = None,
 ) -> None:
     layout = ehijing_run_layout(run_dir)
     mkdir(layout["events"])
@@ -219,6 +223,10 @@ def ehijing_task(
 
     if history is not None:
         cmd.extend(["--history", history])
+    for flag, value in (("--nuclear-target", nuclear_target), ("--nucleon-width-fm", nucleon_width_fm),
+                        ("--nuclear-radius-fm", nuclear_radius_fm), ("--nuclear-surface-fm", nuclear_surface_fm)):
+        if value is not None:
+            cmd.extend([flag, str(value)])
     run(cmd)
 
     atomic_done_marker(chunk_done)
@@ -238,6 +246,10 @@ def ehijing_task(
         "dis_cuts_config": str(Path(dis_cuts_config_file)),
         "events_dir": str(events_dir),
         "history": history if history is not None else "executable_default",
+        "nuclear_target": nuclear_target if nuclear_target is not None else "executable_default",
+        "nucleon_width_fm": nucleon_width_fm,
+        "nuclear_radius_fm": nuclear_radius_fm,
+        "nuclear_surface_fm": nuclear_surface_fm,
     }
 
     with layout["manifest"].open("a", encoding="utf-8") as f:
@@ -395,6 +407,10 @@ def cmd_ehijing(args: argparse.Namespace) -> None:
         hadronization_config_file=hadronization_config_file,
         dis_cuts_config_file=dis_cuts_config_file,
         history=getattr(args, "history", None),
+        nuclear_target=getattr(args, "nuclear_target", None),
+        nucleon_width_fm=getattr(args, "nucleon_width_fm", None),
+        nuclear_radius_fm=getattr(args, "nuclear_radius_fm", None),
+        nuclear_surface_fm=getattr(args, "nuclear_surface_fm", None),
     )
 
 
@@ -529,6 +545,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--history", choices=("on", "off"), default=None,
         help="HepMC3 ASCII spacetime history (new eHIJING builds default to on)",
     )
+    per.add_argument("--nuclear-target", choices=("on", "off"), default=None,
+                     help="Shared Gaussian nuclear target (new builds default to on)")
+    per.add_argument("--nucleon-width-fm", type=float, default=None)
+    per.add_argument("--nuclear-radius-fm", type=float, default=None)
+    per.add_argument("--nuclear-surface-fm", type=float, default=None)
     per.add_argument(
         "--first-event-id",
         type=int,

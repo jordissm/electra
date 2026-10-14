@@ -67,6 +67,27 @@ Z=1 #36
 A=2 #84
 MED_MODIF_MODE=0
 K=4.0
+# Optional shared-target controls; omit flags for older executable compatibility.
+NUCLEAR_ARGS=""
+if [[ -n "${NUCLEAR_TARGET:-}" ]]; then
+    case "$NUCLEAR_TARGET" in
+        on|off) NUCLEAR_ARGS=" --nuclear-target $NUCLEAR_TARGET" ;;
+        *) echo "Error: NUCLEAR_TARGET must be on or off" >&2; exit 1 ;;
+    esac
+fi
+for nuclear_parameter in NUCLEON_WIDTH_FM NUCLEAR_RADIUS_FM NUCLEAR_SURFACE_FM; do
+    nuclear_value="${!nuclear_parameter:-}"
+    if [[ -z "$nuclear_value" ]]; then continue; fi
+    if ! [[ "$nuclear_value" =~ ^[0-9]+([.][0-9]+)?([eE][+-]?[0-9]+)?$ ]]; then
+        echo "Error: $nuclear_parameter must be a nonnegative number" >&2; exit 1
+    fi
+    case "$nuclear_parameter" in
+        NUCLEON_WIDTH_FM) nuclear_flag="--nucleon-width-fm" ;;
+        NUCLEAR_RADIUS_FM) nuclear_flag="--nuclear-radius-fm" ;;
+        NUCLEAR_SURFACE_FM) nuclear_flag="--nuclear-surface-fm" ;;
+    esac
+    NUCLEAR_ARGS="$NUCLEAR_ARGS $nuclear_flag $nuclear_value"
+done
 # Select the settings bundle under input/ehijing/experiments/ (required).
 : "${EXPERIMENT:?Set EXPERIMENT to an experiment directory under input/ehijing/experiments/}"
 EXPERIMENT_CONFIG_DIR="$PROJECT_ROOT/input/ehijing/experiments/$EXPERIMENT"
@@ -247,7 +268,7 @@ apptainer exec \
     /bin/bash --noprofile --norc -lc "
         set -euo pipefail
         electra ehijing run \
-            --Z ${Z} \
+            --Z ${Z} ${NUCLEAR_ARGS} \
             --A ${A} \
             --medium-modification-mode \${MED_MODIF_MODE} \
             --run-path \${EHIJING_RUN_DIR_CONT} \
