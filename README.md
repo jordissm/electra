@@ -65,7 +65,9 @@ the installer adds missing files and preserves existing utility files.
 
 ### Hadronization spacetime diagrams
 
-Enable the following in the eHIJING hadronization configuration:
+Fragmentation tracing and diagnostic spacetime history are off by default.
+Enable history with `--history on` on `ehijing` or `electra ehijing run`.
+Enable fragmentation tracing in the eHIJING hadronization configuration:
 
 ```text
 HadronVertex:trace = on

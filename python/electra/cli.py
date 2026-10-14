@@ -543,7 +543,7 @@ def build_parser() -> argparse.ArgumentParser:
     per.add_argument("--seed", type=int, default=12345)
     per.add_argument(
         "--history", choices=("on", "off"), default=None,
-        help="HepMC3 ASCII spacetime history (new eHIJING builds default to on)",
+        help="HepMC3 ASCII spacetime history (new eHIJING builds default to off)",
     )
     per.add_argument("--nuclear-target", choices=("on", "off"), default=None,
                      help="Shared Gaussian nuclear target (new builds default to on)")

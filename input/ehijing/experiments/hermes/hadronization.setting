@@ -33,7 +33,7 @@ Fragmentation:setVertices = on
 HadronVertex:mode = 2
 HadronVertex:smearOn = off
 HadronVertex:xySmear = 0.7
-HadronVertex:trace = on
+HadronVertex:trace = off
 
 # Make energy-momentum conservation in PYTHIA more precise
 Check:epTolErr = 1e-6
