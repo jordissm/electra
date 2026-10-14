@@ -41,13 +41,15 @@ modified_files/
 test/
 
 # ========================
-# Development documentation
-docs/
+# Documentation build products
+docs/_build/
+docs/_generated/
+docs/.venv/
 AGENTS.md
 
 # ========================
 # Analysis output
-analysis/
+/analysis/
 
 # ========================
 # Development directory
