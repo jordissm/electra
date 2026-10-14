@@ -71,6 +71,9 @@ def prepare_cpp_api(root: Path, docs: Path) -> Path:
     if executable is None:
         raise RuntimeError("The cpp-api build requires Doxygen on PATH. See docs/README.md.")
     output = docs / "_build" / "doxygen"
+    # This runs while Sphinx loads conf.py, before Sphinx creates _build.
+    # Doxygen versions used in CI require the parent directory to exist.
+    output.mkdir(parents=True, exist_ok=True)
     # XML only; exclude third-party sources and component Markdown pages.
     config = f'''PROJECT_NAME = eHIJING
 OUTPUT_DIRECTORY = "{output}"
