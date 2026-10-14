@@ -24,7 +24,7 @@ through Breathe. It reads public application headers and excludes third-party
 code. Neither build compiles the simulation executables or generates events.
 
 The [build README](https://github.com/jordissm/electra/blob/main/docs/README.md)
-has the pinned eHIJING checkout instructions for a fresh ELECTRA clone.
+has the eHIJING checkout instructions for a fresh ELECTRA clone.
 
 ## Sources and maintenance
 
@@ -36,8 +36,10 @@ The eHIJING physics and interface documentation remains authoritative in
 `docs/_ext/project_docs.py` splits those pages into the ignored
 `docs/_generated/` directory and converts Doxygen math delimiters to MyST.
 Do not edit generated pages. Local builds use the existing component checkout;
-CI uses `docs/ehijing-revision.txt`. When updating that pin, review the component
-documentation and confirm it describes the executable version you intend to use.
+CI uses `docs/ehijing-revision.txt` to check out the latest commit on eHIJING's
+`main` branch at each build. An eHIJING push alone does not trigger a rebuild.
+The published component documentation therefore describes that checkout;
+when using a different executable revision, consult its accompanying documentation.
 
 The CLI help is generated from the actual argument parser. Python API entries
 come from docstrings; C++ API entries come from Doxygen comments.
@@ -49,7 +51,7 @@ diagram. HTML uses scalable SVG; keep this single diagram source alongside
 the physics text when the execution flow changes.
 
 The assumptions review is maintained in `src/ehijing/docs/assumptions.md` and
-adapted into its own manual page. For an older pinned component revision that
+adapted into its own manual page. For an older component checkout that
 does not contain that file, the manual displays an availability notice rather
 than presenting a review of a different implementation.
 

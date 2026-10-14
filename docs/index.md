@@ -46,7 +46,7 @@ _generated/cpp-api
 ```
 
 The component physics pages are adapted at build time from the eHIJING checkout;
-the CI revision is recorded in `docs/ehijing-revision.txt`.
+CI tracks eHIJING's `main` branch using `docs/ehijing-revision.txt`.
 The [eHIJING paper](https://doi.org/10.1103/PhysRevD.110.034001) describes
 the event-generation model. See the [SMASH documentation](https://smash-transport.github.io/)
 for its upstream transport model and configuration.

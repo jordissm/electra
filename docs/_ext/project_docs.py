@@ -43,7 +43,7 @@ def prepare_sources(root: Path, docs: Path) -> None:
     if not (source / "docs" / "units.md").is_file():
         raise RuntimeError(
             "Missing src/ehijing documentation checkout. "
-            "See docs/README.md for the pinned checkout instructions."
+            "See docs/README.md for the component checkout instructions."
         )
     readme = (source / "README.md").read_text(encoding="utf-8")
     sections = [
@@ -64,14 +64,14 @@ def prepare_sources(root: Path, docs: Path) -> None:
     if assumptions.is_file():
         assumptions_text = myst_text(assumptions.read_text(encoding="utf-8"))
     else:
-        # Older pinned component revisions do not contain the audit page.
+        # Older component checkouts do not contain the audit page.
         assumptions_text = """# Physical assumptions and open questions
 
 This checked-out eHIJING revision does not include the assumptions review.
 See the [component manual](ehijing.md) and [unit conventions](units.md) for
 the documentation supplied by that revision. The full review becomes available
 when the component checkout includes `docs/assumptions.md`; CI uses the revision
-recorded in `docs/ehijing-revision.txt`.
+selected by `docs/ehijing-revision.txt`.
 """
     write_if_changed(destination / "assumptions.md", assumptions_text)
     from electra.cli import build_parser

@@ -15,9 +15,10 @@ git -C src/ehijing checkout "$(cat docs/ehijing-revision.txt)"
 ```
 
 Do not reset an existing working checkout to build documentation. Local builds
-use that checkout, including its documentation edits. CI checks out the revision
-in `ehijing-revision.txt`. Update the pin deliberately when adopting component
-changes; no SMASH/PYTHIA checkout or physics build is required for this manual.
+use that checkout, including its documentation edits. CI reads
+`ehijing-revision.txt`, which tracks the latest commit on eHIJING's `main` branch
+at each build. An eHIJING push alone does not trigger this workflow.
+No SMASH/PYTHIA checkout or physics build is required for this manual.
 
 ## Build
 
