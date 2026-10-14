@@ -9,7 +9,7 @@ General:
 
 Modi:
     List:
-        Optional_Quantities: ["ID", "charge", "begin_form_time", "xsecfac"]
+        Optional_Quantities: ["ID", "charge", "prod_time", "form_time", "xsecfac"]
 
 Output:
     Output_Interval: 50.0
