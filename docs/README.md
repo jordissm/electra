@@ -3,6 +3,7 @@
 The manual uses Sphinx, MyST Markdown, MathJax, Python autodoc and optional
 Doxygen/Breathe C++ references. Run commands from the ELECTRA repository root.
 Use Python 3.11 or newer for the documentation toolchain.
+Install Graphviz with `dot` on `PATH` to render the manual's flow diagrams.
 
 ## Component checkout
 

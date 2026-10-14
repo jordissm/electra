@@ -2,7 +2,8 @@
 
 ## Build the manual
 
-The documentation toolchain requires Python 3.11 or newer. The runtime CLI
+The documentation toolchain requires Python 3.11 or newer and Graphviz (`dot`
+on `PATH`) for the flow diagrams. The runtime CLI
 continues to support Python 3.10. From the repository root:
 
 ```bash
@@ -40,6 +41,12 @@ documentation and confirm it describes the executable version you intend to use.
 
 The CLI help is generated from the actual argument parser. Python API entries
 come from docstrings; C++ API entries come from Doxygen comments.
+
+The eHIJING manual's flow diagram is authored as a Doxygen `\dot` / `\enddot`
+block in `src/ehijing/docs/mainpage.md`. The adapter converts that block to a
+MyST `graphviz` directive, so Sphinx and standalone Doxygen render the same
+diagram. HTML uses scalable SVG; keep this single diagram source alongside
+the physics text when the execution flow changes.
 
 ## LaTeX mathematics
 

@@ -36,7 +36,7 @@ jobs:
       - name: Install documentation dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install --yes doxygen
+          sudo apt-get install --yes doxygen graphviz
           python -m pip install -r docs/requirements.txt
       - name: Build manual and API reference
         run: sphinx-build -t cpp-api -b html -W --keep-going docs docs/_build/html

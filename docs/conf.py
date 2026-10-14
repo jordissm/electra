@@ -19,6 +19,7 @@ version = release
 extensions = [
     "myst_parser",
     "sphinx.ext.mathjax",
+    "sphinx.ext.graphviz",
     "sphinx.ext.autodoc",
     "sphinx.ext.viewcode",
     "sphinx.ext.githubpages",
@@ -40,6 +41,7 @@ html_theme_options = {"navigation_depth": 3}
 html_title = "ELECTRA documentation"
 html_static_path = ["_static"]
 html_css_files = ["custom.css"]
+graphviz_output_format = "svg"
 latex_documents = [("index", "electra.tex", "ELECTRA Documentation", author, "manual")]
 
 # The component checkout is intentionally separate from the ELECTRA repository.

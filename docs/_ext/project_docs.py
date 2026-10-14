@@ -14,7 +14,18 @@ def write_if_changed(path: Path, text: str) -> None:
 
 
 def myst_text(text: str) -> str:
+    text = re.sub(
+        r"^\\dot[ \t]*\n(.*?)^\\enddot[ \t]*$",
+        lambda match: (
+            "```{graphviz}\n:align: center\n"
+            ":alt: eHIJING event flow with generation, medium processing, hadronization, output and retry paths.\n\n"
+            + match[1].strip() + "\n```"
+        ),
+        text,
+        flags=re.DOTALL | re.MULTILINE,
+    )
     text = re.sub(r"\\f\$(.*?)\\f\$", r"$\1$", text, flags=re.DOTALL)
+    text = text.replace(r"\f[", "$$").replace(r"\f]", "$$")
     text = text.replace(r"\[", "$$").replace(r"\]", "$$")
     text = text.replace("# Unit conventions {#unit_conventions}", "(unit-conventions)=\n# Unit conventions")
     text = text.replace("@ref unit_conventions", "[unit conventions](units.md)")
