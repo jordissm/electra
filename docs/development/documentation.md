@@ -55,6 +55,12 @@ adapted into its own manual page. For an older component checkout that
 does not contain that file, the manual displays an availability notice rather
 than presenting a review of a different implementation.
 
+The physics tutorial is maintained in
+`src/ehijing/docs/physics-tutorial.md` and adapted into
+`_generated/physics-tutorial.md`. Its Doxygen equations are converted to MyST
+math for the manual. Older component revisions receive an availability notice;
+include the component change when publishing a revision of this tutorial.
+
 The seed policy is maintained in the `Reproducibility and seeds` section of
 `src/ehijing/README.md` and adapted into `_generated/reproducibility.md` as a
 separate manual page. Keep it separate from the fragmentation guide when editing
