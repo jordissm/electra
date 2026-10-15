@@ -89,6 +89,8 @@ See [documentation build instructions](docs/README.md) to generate the searchabl
 HTML manual, including LaTeX equations and optional C++ API references.
 
 For fragmentation plots, see the [spacetime diagram guide](docs/analysis/fragmentation.md).
+For identified-hadron spectra before and after transport, see the
+[OSCAR analysis guide](docs/analysis/oscar.md).
 
 ## Citation
 

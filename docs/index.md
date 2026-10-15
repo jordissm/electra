@@ -19,6 +19,7 @@ running/slurm
 configuration
 outputs
 analysis/fragmentation
+analysis/oscar
 analysis/rivet
 ```
 
