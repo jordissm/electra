@@ -59,6 +59,10 @@ without `prod_time_status` need a matching configuration without that field.
 See [unit conventions](../_generated/units.md). Retain the other configuration
 sections and select the transport settings appropriate for your study.
 
+The bundled config uses the imported Lund-based formation times by default
+without a formation-time section. See [SMASH formation times](../configuration.md#smash-formation-times)
+to select the secondary constant proper-time mode in your working copy.
+
 ## Run transport
 
 ```bash

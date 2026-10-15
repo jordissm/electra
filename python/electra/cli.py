@@ -433,7 +433,6 @@ def smash_physical_event_task(
         (
             "Collision_Term: { Cross_Section_Formation_Scaling: { "
             "Profile: { "
-            # f"Formation_Time: '{1.0}', "
             f"Path: '{profile_path}' "
             "} } }"
         ),

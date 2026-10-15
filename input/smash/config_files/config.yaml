@@ -16,8 +16,3 @@ Output:
     Particles:
         Format: ["Oscar2013"]
         Extended: True
-
-Collision_Term:
-    Cross_Section_Formation_Scaling:
-        Profile:
-            Formation_Time: 1.0
