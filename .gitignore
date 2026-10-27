@@ -61,9 +61,12 @@ AGENTS.md
 !/analysis/scripts/cross_section_profile_comparison/R_A/plot_RA_vs_zh.py
 !/analysis/scripts/cross_section_profile_comparison/R_A/RA_vs_zh_inputs.yaml
 !/analysis/scripts/cross_section_profile_comparison/R_A/plot_HP2026_poster.py
+!/analysis/scripts/cross_section_profile_comparison/times_vs_zh/*.py
+!/analysis/scripts/cross_section_profile_comparison/times_vs_zh/times_vs_zh_inputs.example.json
 !/analysis/run_HERMES_plot_scripts.sh
 !/analysis/run_HERMES_model_comparison_plot_scripts_R_A.sh
 !/analysis/run_HERMES_cross_section_profile_comparison_plot_scripts_R_A.sh
+!/analysis/run_cross_section_profile_comparison_times_vs_zh.sh
 
 # ========================
 # Development directory

@@ -108,6 +108,15 @@ or customize their labels, replace `profile_directory` in
 explicit `scenarios` list containing `label`, `deuterium`, and `nuclei`
 entries, as used by the model-comparison configuration.
 
+For pooled charged-hadron mean production and formation times versus `z_h`,
+run the C++ `utils/analyze_oscar_output.cpp` analyzer on the data host, directly
+or through the SLURM analysis wrapper. Every run applies the HERMES selections
+and writes native YODA time profiles alongside all multiplicity histograms.
+`analysis/run_cross_section_profile_comparison_times_vs_zh.sh` reads only those
+YODA files and plots them locally as PDF/PNG, independently of target species.
+See the [time analysis guide](docs/analysis/times-vs-zh.md) for configuration
+and input requirements.
+
 ## Citation
 
 If you use ELECTRA in your research, please cite:

@@ -1,0 +1,9 @@
+{
+  "title": "Charged-hadron production and formation times",
+  "samples": [
+    {
+      "label": "eHIJING",
+      "yoda": "../../../output/cross_section_profile_comparison/times_vs_zh/ehijing.yoda"
+    }
+  ]
+}

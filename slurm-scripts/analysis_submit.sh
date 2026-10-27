@@ -18,6 +18,9 @@ Options can also be supplied as environment variables:
   FRAME, HERMES_ACCEPTANCE, HERMES_BEAM_ENERGY, HERMES_BEAM_DIRECTION,
   OUT, SKIP_INDEXING, SUBRUN_LABEL
 
+Every analysis writes multiplicity spectra and charged-hadron time profiles
+together in the output YODA file.
+
 Set SKIP_INDEXING=1 to reuse an existing FILE_LIST and submit only the analysis job.
 The default z_h axis uses HERMES Fig. 2 edges. Setting any ZH_* axis option
 selects uniform bins (fallbacks: ZH_MIN=0.05, ZH_MAX=0.95, ZH_NBINS=9).

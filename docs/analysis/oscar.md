@@ -3,7 +3,8 @@
 `utils/analyze_oscar_output.cpp` is a standalone C++ analyzer for the
 OSCAR2013 particle lists produced before and after hadronic transport. It reads
 the original eHIJING DIS metadata and writes identified-hadron multiplicity
-distributions to a YODA-like text file. It does not require Rivet, ROOT, or the
+distributions and charged-hadron time profiles to one YODA text file on every
+run. It does not require Rivet, ROOT, or the
 simulation libraries.
 
 Use separate analyzer invocations for eHIJING and for each SMASH profile. This
@@ -69,8 +70,7 @@ The analyzer accepts newline-delimited JSON or concatenated, pretty-printed
 JSON objects. Every object must contain `event`, `Z`, `A`, `xB`, `Q2`, `y`,
 `nu`, `P4`, and `q4`. Four-vectors use `[px, py, pz, E]`, with components in
 GeV; `Q2` is in GeV². Keep the generator's original values and frame. Extra
-fields are ignored. If duplicate IDs are supplied directly, the analyzer keeps
-the first object without reporting the duplication.
+fields are ignored. Duplicate metadata event IDs are rejected.
 
 ### OSCAR particle lists and event IDs
 
@@ -80,10 +80,12 @@ The first twelve particle columns must be, in this order:
 t x y z mass p0 px py pz pdg ID charge
 ```
 
-Additional columns, including eHIJING's production/formation times and SMASH's
-extended quantities, are ignored. Momentum, energy and mass use GeV. The
-analyzer ignores positions and times; their interface conventions remain fm
-and fm/c as described in [unit conventions](../_generated/units.md).
+Multiplicity spectra use these twelve columns. The time profiles additionally
+read named `prod_time`, `form_time`, and `prod_time_status` columns when present.
+Legacy or SMASH inputs without these columns still produce all histograms;
+their time profiles are marked unavailable. Momentum, energy and mass use GeV;
+positions and coordinate times use fm and fm/c as described in
+[unit conventions](../_generated/units.md).
 OSCAR1999, binary output, and reordered custom ASCII columns are not supported.
 
 An analyzed block starts with a comment such as `# event 42 out 12` or
@@ -354,6 +356,13 @@ Different selection/acceptance/beam annotations across targets are rejected.
 The separate `e_d` plotting scripts continue to read the generic spectra for
 their existing multiplicity comparisons.
 
+For pooled charged-hadron mean production and formation times versus $z_h$,
+see the [time analysis guide](times-vs-zh.md). The C++ analyzer reads the OSCAR
+time/status columns and includes native YODA time profiles alongside the
+multiplicity histograms on every run. These apply the HERMES `zh` selections.
+The scripts in `analysis/` only read the combined
+YODA files and plot; any target can be analyzed without a nuclear ratio.
+
 ## Options and observables
 
 These are the **executable** defaults, which differ from the SLURM defaults
@@ -415,8 +424,9 @@ Four fixed slices are used for all double-differential distributions:
 | $0.4 < z_h < 0.6$ | `zh0p4_0p6` |
 | $0.6 < z_h < 0.8$ | `zh0p6_0p8` |
 
-Values exactly on these slice boundaries are excluded. `--zh-*` controls only
-the inclusive spectrum; it does not change the fixed slices. The fixed $Q^2$
+Values exactly on these slice boundaries are excluded. `--zh-*` controls the
+inclusive spectrum and time-profile binning; it does not change the fixed
+slices or HERMES multiplicity axes. The fixed $Q^2$
 edges in GeV² are `1, 1.5, 2, 3, 4, 5, 6, 8, 25`, and the
 fixed $x_B$ edges are `0.023, 0.04, 0.055, 0.075, 0.1, 0.14, 0.2, 0.3, 0.4, 0.6`.
 Histogram bins include the lower edge and exclude the upper edge.
@@ -431,8 +441,10 @@ all transverse momenta of the accepted species.
 
 ## Read and normalize the output
 
-Each run writes 150 `YODA_HISTO1D_V2` blocks: the 45 dedicated HERMES blocks
-above plus 105 generic blocks (fifteen per species). The generic paths are:
+Each run writes 152 objects: 150 `YODA_HISTO1D_V2` blocks (the 45 dedicated
+HERMES blocks above plus 105 generic blocks, fifteen per species) and two
+charged-hadron time `YODA_PROFILE1D_V2` blocks described in the
+[time analysis guide](times-vs-zh.md). The generic histogram paths are:
 
 | Distribution | Path, with species tag `TAG` and slice suffix `SLICE` |
 | --- | --- |

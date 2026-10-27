@@ -24,13 +24,16 @@ REFERENCE_EDGES = {
 
 def read_histograms(path):
     histograms = {}
+    current = None
     for line in path.read_text().splitlines():
         if line.startswith("BEGIN YODA_HISTO1D_V2 "):
             current = {"bins": []}
             histograms[line.split()[2]] = current
-        elif line and line[0].isdigit():
+        elif line.startswith(("BEGIN ", "END ")):
+            current = None
+        elif current is not None and line and line[0].isdigit():
             current["bins"].append(tuple(map(float, line.split())))
-        elif line.startswith(("Underflow", "Overflow")):
+        elif current is not None and line.startswith(("Underflow", "Overflow")):
             current[line.split()[0]] = tuple(map(float, line.split()[2:]))
     return histograms
 

@@ -8,6 +8,8 @@
 //   (1/Nevt) dN/(dxB dz_h) vs xB in fixed z_h slices.
 //   (1/Nevt) dN/dnu and (1/Nevt) dN/dQ2, integrated over z_h and pT.
 // Default z_h, nu, and Q2 axes match HERMES arXiv:0704.3270, Fig. 2.
+// Also writes native YODA Profile1D objects for the pooled
+// charged-hadron production/formation coordinate times with the HERMES z_h cuts.
 // Additional /HERMES_2007 histograms apply the Fig. 2 selection and retain
 // per-bin DIS denominators and event-level hadron-count second moments.
 //
@@ -20,6 +22,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <fstream>
+#include <filesystem>
 #include <iomanip>
 #include <iostream>
 #include <iterator>
@@ -28,6 +31,7 @@
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -427,11 +431,15 @@ std::array<double, 4> getArray4(const std::string& js, const std::string& key) {
   return values;
 }
 
-std::unordered_map<int, MetaDIS> loadMeta(const std::string& path) {
+std::unordered_map<int, MetaDIS> loadMeta(const std::string& path, bool strict = false) {
   std::unordered_map<int, MetaDIS> meta;
   for (const std::string& js : readJsonObjects(path)) {
     MetaDIS m;
-    m.event = static_cast<int>(getNumber(js, "event"));
+    const double eventId = getNumber(js, "event");
+    if (strict && (eventId < 0 || eventId > std::numeric_limits<int>::max() || eventId != std::floor(eventId))) {
+      throw std::runtime_error("Invalid metadata event ID");
+    }
+    m.event = static_cast<int>(eventId);
     m.Z = static_cast<int>(getNumber(js, "Z"));
     m.A = static_cast<int>(getNumber(js, "A"));
     m.xB = getNumber(js, "xB");
@@ -442,7 +450,12 @@ std::unordered_map<int, MetaDIS> loadMeta(const std::string& path) {
     const auto q4 = getArray4(js, "q4");
     m.P = {P4[3], P4[0], P4[1], P4[2]};
     m.q = {q4[3], q4[0], q4[1], q4[2]};
-    meta.emplace(m.event, m);
+    if (strict && (m.P.E <= 0.0 || minkowskiDot(m.P, m.P) <= 0.0 ||
+                   minkowskiDot(m.P, m.q) <= 0.0)) {
+      throw std::runtime_error("Invalid event ID or DIS four-vectors in time-analysis metadata");
+    }
+    const bool inserted = meta.emplace(m.event, m).second;
+    if (strict && !inserted) throw std::runtime_error("Duplicate metadata event ID: " + std::to_string(m.event));
   }
   if (meta.empty()) throw std::runtime_error("Metadata file had zero parsed events: " + path);
   return meta;
@@ -586,8 +599,8 @@ void printUsage(const char* argv0) {
       << "  z_h: 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.3\n"
       << "  nu [GeV]: 4 6 8 10 12 14 16 18 20 23.5\n"
       << "  Q2 [GeV^2]: 1 1.5 2 3 4 5 6 8 25\n"
-      << "Any --zh-* option selects a uniform z_h axis for the generic spectra.\n"
-      << "/HERMES_2007 outputs always use the fixed Fig. 2 cuts and binning.\n";
+      << "Any --zh-* option selects a uniform z_h axis for generic spectra and time profiles.\n"
+      << "Multiplicity /HERMES_2007 outputs always use the fixed Fig. 2 cuts and binning.\n";
 }
 
 Config parseArgs(int argc, char** argv) {
@@ -850,6 +863,147 @@ void analyzeHermesParticle(const Particle& particle, const MetaDIS& meta,
   if (meta.nu > 6.0 && zh > 0.2 && iq2 >= 0) ++event.q2[is][iq2];
 }
 
+// Raw Profile1D moments: sumw, sumw2, sumwx, sumwx2, sumwy, sumwy2, entries.
+// Unit weights make sumwy/sumw the pooled per-hadron mean, including genuine zeros.
+struct TimeMoments {
+  std::array<long double, 7> values{};
+
+  void fill(long double z, long double time) {
+    const std::array<long double, 7> increment = {1, 1, z, z * z, time, time * time, 1};
+    for (std::size_t i = 0; i < values.size(); ++i) values[i] += increment[i];
+  }
+
+  void add(const TimeMoments& other) {
+    for (std::size_t i = 0; i < values.size(); ++i) values[i] += other.values[i];
+  }
+};
+
+struct TimeState {
+  std::vector<double> edges;
+  std::array<std::vector<TimeMoments>, 2> bins;
+  std::array<TimeMoments, 2> underflow, overflow;
+  std::size_t events = 0, particles = 0, accepted = 0, spectators = 0, unavailable = 0;
+  std::size_t availableEvents = 0, missingColumnEvents = 0;
+  int targetZ = -1, targetA = -1;
+
+  explicit TimeState(const Config& cfg) {
+    edges.assign(ZH_EDGES.begin(), ZH_EDGES.end());
+    if (cfg.uniformZhBins) {
+      edges.resize(static_cast<std::size_t>(cfg.zhNBins) + 1);
+      for (int i = 0; i <= cfg.zhNBins; ++i) {
+        edges[static_cast<std::size_t>(i)] = cfg.zhMin + (cfg.zhMax - cfg.zhMin) * i / cfg.zhNBins;
+      }
+    }
+    for (auto& profile : bins) profile.resize(edges.size() - 1);
+  }
+};
+
+std::vector<std::string> timeTokens(const std::string& line) {
+  std::istringstream stream(line);
+  return {std::istream_iterator<std::string>(stream), std::istream_iterator<std::string>()};
+}
+
+double timeNumber(const std::string& token) {
+  std::size_t end = 0;
+  const double value = std::stod(token, &end);
+  if (end != token.size()) throw std::runtime_error("Invalid OSCAR numeric token: " + token);
+  return value;
+}
+
+int timeInteger(const std::string& token) {
+  std::size_t end = 0;
+  const int value = std::stoi(token, &end);
+  if (end != token.size()) throw std::runtime_error("Invalid OSCAR integer token: " + token);
+  return value;
+}
+
+void fillTimeParticle(const Particle& particle, double production, double formation,
+                      const MetaDIS& meta, const Config& cfg, TimeState& state) {
+  if (!std::isfinite(production) || !std::isfinite(formation)) {
+    throw std::runtime_error("Non-finite available production/formation coordinate time");
+  }
+  if (!std::isfinite(particle.p.E) || particle.p.E <= 0.0 ||
+      !std::isfinite(particle.p.px) || !std::isfinite(particle.p.py) || !std::isfinite(particle.p.pz)) {
+    throw std::runtime_error("Invalid charged-hadron momentum");
+  }
+  if (!(meta.nu > 6.0) || !passesHermesDIS(meta, cfg)) return;
+  const double z = minkowskiDot(meta.P, particle.p) / minkowskiDot(meta.P, meta.q);
+  const double xf = feynmanX(particle.p, meta.P, meta.q);
+  if (!std::isfinite(z) || !(z > 0.1) || !std::isfinite(xf) || !(xf > 0.0)) return;
+  FourVec ph = particle.p, q = meta.q, P = meta.P;
+  toFrame(FrameChoice::TRF, ph, q, P);
+  const double momentum = mag(p3(ph));
+  if (!(momentum > 2.0 && momentum < 15.0)) return;
+  if (cfg.hermesAngularAcceptance && !inHermesAcceptance(ph, cfg)) return;
+  const std::array<double, 2> times = {production, formation};
+  for (std::size_t i = 0; i < times.size(); ++i) {
+    if (z < state.edges.front()) state.underflow[i].fill(z, times[i]);
+    else if (z >= state.edges.back()) state.overflow[i].fill(z, times[i]);
+    else {
+      const auto bin = static_cast<std::size_t>(std::upper_bound(state.edges.begin(), state.edges.end(), z) - state.edges.begin() - 1);
+      state.bins[i][bin].fill(z, times[i]);
+    }
+  }
+  if (z >= state.edges.front() && z < state.edges.back()) ++state.accepted;
+}
+
+void writeTimeProfiles(std::ostream& out, const Config& cfg, const TimeState& state) {
+  out << std::scientific << std::setprecision(17);
+  const std::array<std::string, 2> quantities = {"production", "formation"};
+  for (std::size_t index = 0; index < quantities.size(); ++index) {
+    const std::string path = "/HERMES_2007/zh/" + quantities[index] + "_time_charged";
+    out << "BEGIN YODA_PROFILE1D_V2 " << path << "\nPath: " << path
+        << "\nTitle: Charged-hadron " << quantities[index] << " coordinate time vs z_h\nType: Profile1D\n"
+        << "Selection: HERMES_2007_FIG2_ZH_CHARGED_TIMES_V1\n"
+        << "TimeDefinition: StoredOSCARCoordinateTime\nTimeUnit: fm/c\nWeighting: UnitPerChargedHadron\n"
+        << "Species: -2212 -321 -211 211 321 2212\nProductionStatus: 1\n"
+        << "Acceptance: " << (cfg.hermesAngularAcceptance ? "rectangular" : "none")
+        << "\nBeamEnergyGeV: " << cfg.hermesBeamEnergy
+        << "\nBeamDirection: " << (cfg.hermesBeamDirection < 0 ? "-z" : "+z")
+        << "\nTargetZ: " << state.targetZ << "\nTargetA: " << state.targetA
+        << "\nTimeColumns: " << (state.availableEvents == 0 ? "unavailable" : state.missingColumnEvents ? "partial" : "complete")
+        << "\nTimeColumnsAvailableEvents: " << state.availableEvents
+        << "\nTimeColumnsMissingEvents: " << state.missingColumnEvents
+        << "\nEventsSeen: " << state.events << "\nParticlesSeen: " << state.particles
+        << "\nExcludedSpectators: " << state.spectators << "\nUnavailableProduction: " << state.unavailable
+        << "\n---\n# ID ID sumw sumw2 sumwx sumwx2 sumwy sumwy2 numEntries\n";
+    auto write = [&](const std::string& low, const std::string& high, const TimeMoments& moments) {
+      out << low << '\t' << high;
+      for (const auto value : moments.values) out << '\t' << value;
+      out << '\n';
+    };
+    TimeMoments total = state.underflow[index];
+    total.add(state.overflow[index]);
+    for (const auto& bin : state.bins[index]) total.add(bin);
+    write("Total", "Total", total);
+    write("Underflow", "Underflow", state.underflow[index]);
+    write("Overflow", "Overflow", state.overflow[index]);
+    out << "# xlow xhigh sumw sumw2 sumwx sumwx2 sumwy sumwy2 numEntries\n";
+    for (std::size_t bin = 0; bin + 1 < state.edges.size(); ++bin) {
+      out << state.edges[bin] << '\t' << state.edges[bin + 1];
+      for (const auto value : state.bins[index][bin].values) out << '\t' << value;
+      out << '\n';
+    }
+    out << "END YODA_PROFILE1D_V2\n\n";
+  }
+  if (!out) throw std::runtime_error("Failed writing time-profile file: " + cfg.outPath);
+}
+
+void validateInputPaths(const Config& cfg) {
+  std::unordered_set<std::string> inputs;
+  const auto output = std::filesystem::weakly_canonical(cfg.outPath);
+  if (output == std::filesystem::canonical(cfg.metaPath)) throw std::runtime_error("Output must not overwrite DIS metadata");
+  for (const auto& path : cfg.fileListPaths) {
+    if (path != "-" && output == std::filesystem::canonical(path)) throw std::runtime_error("Output must not overwrite an input manifest");
+  }
+  for (const auto& path : cfg.oscarPaths) {
+    const auto canonical = std::filesystem::canonical(path);
+    if (output == canonical) throw std::runtime_error("Output must not overwrite OSCAR input");
+    if (!inputs.insert(canonical.string()).second) throw std::runtime_error("Duplicate OSCAR input path: " + path);
+  }
+
+}
+
 void finishHermesEvent(const HermesEvent& event, const MetaDIS& meta, HermesState& state) {
   if (!event.accepted) return;
   ++state.acceptedDIS;
@@ -1032,7 +1186,7 @@ void analyzeParticle(const Particle& particle, const MetaDIS& meta, const Config
 }
 
 void analyzeOscarFile(const std::string& path, const std::unordered_map<int, MetaDIS>& meta, const Config& cfg,
-                      AnalysisState& state) {
+                      AnalysisState& state, TimeState& times) {
   std::ifstream in(path);
   if (!in) throw std::runtime_error("Cannot open OSCAR file: " + path);
 
@@ -1043,25 +1197,84 @@ void analyzeOscarFile(const std::string& path, const std::unordered_map<int, Met
   const MetaDIS* currentMeta = nullptr;
   bool inEvent = false;
   HermesEvent hermesEvent;
+  std::unordered_map<std::string, std::size_t> columns;
+  bool hasTimeColumns = false;
+  int headerEvent = -1, headerEnsemble = -1, remaining = 0;
+  std::size_t lineNumber = 0;
+  const std::array<std::string, 12> standardColumns = {
+      "t", "x", "y", "z", "mass", "p0", "px", "py", "pz", "pdg", "ID", "charge"};
+  const std::array<std::string, 3> timeColumns = {"prod_time", "form_time", "prod_time_status"};
+
+  auto blockIdentity = [&](const std::string& text) {
+    const auto fields = timeTokens(text);
+    if (fields.size() < 5) throw std::runtime_error("Malformed OSCAR event block in " + path);
+    const int event = timeInteger(fields[2]);
+    const bool ensemble = fields[3] == "ensemble";
+    if (ensemble && fields.size() < 7) throw std::runtime_error("Malformed OSCAR ensemble block in " + path);
+    return std::array<int, 3>{event, ensemble ? timeInteger(fields[4]) : -1,
+                             timeInteger(fields[ensemble ? 6 : 4])};
+  };
 
   while (std::getline(in, line)) {
-    //line = trim(line);
+    ++lineNumber;
+    const auto first = line.find_first_not_of(" \t\r");
+    if (first == std::string::npos) continue;
+    line.erase(0, first);
     if (line.empty()) continue;
+    if (line.rfind("#!OSCAR2013 ", 0) == 0) {
+      if (inEvent) throw std::runtime_error("OSCAR header inside event in " + path);
+      const auto fields = timeTokens(line);
+      if (fields.size() < 14 || fields[1] != "particle_lists") {
+        throw std::runtime_error("Require OSCAR2013 particle_lists with the standard twelve columns: " + path);
+      }
+      columns.clear();
+      for (std::size_t i = 2; i < fields.size(); ++i) {
+        if (!columns.emplace(fields[i], i - 2).second) throw std::runtime_error("Duplicate OSCAR column name in " + path);
+      }
+      for (std::size_t i = 0; i < standardColumns.size(); ++i) {
+        if (fields[i + 2] != standardColumns[i]) throw std::runtime_error("Nonstandard OSCAR base column order in " + path);
+      }
+      hasTimeColumns = std::all_of(timeColumns.begin(), timeColumns.end(),
+                                  [&](const std::string& key) { return columns.count(key) != 0; });
+      continue;
+    }
+    if (line.rfind("# Units:", 0) == 0 && hasTimeColumns) {
+      const auto units = timeTokens(line);
+      if (units.size() != columns.size() + 2) throw std::runtime_error("Invalid OSCAR units header in " + path);
+      for (const std::string key : {"prod_time", "form_time"}) {
+        const auto& unit = units[columns.at(key) + 2];
+        if (unit != "fm" && unit != "fm/c") throw std::runtime_error("Require time units in fm/c in " + path);
+      }
+      continue;
+    }
 
     int eventNumber = -1;
     if (parseEventHeader(line, eventNumber)) {
       if (inEvent) throw std::runtime_error("Multiple out blocks before event end in " + path +
                                             "; supply final-only OSCAR particle lists");
       hermesEvent = HermesEvent{};
+      const auto block = blockIdentity(line);
+      headerEvent = block[0];
+      headerEnsemble = block[1];
+      remaining = block[2];
+      if (remaining < 0) throw std::runtime_error("Invalid OSCAR particle count in " + path);
       ++state.eventsSeen;
+      ++times.events;
+      if (hasTimeColumns) ++times.availableEvents;
+      else ++times.missingColumnEvents;
       currentEvent = hasFilenameEvent ? filenameEvent : eventNumber;
       const auto it = meta.find(currentEvent);
       if (it == meta.end()) {
+        if (hasTimeColumns) throw std::runtime_error("Missing DIS metadata for event " + std::to_string(currentEvent));
         ++state.eventsVetoed;
         currentMeta = nullptr;
       } else {
         ++state.eventsWithMeta;
         currentMeta = &it->second;
+        if (times.targetA < 0) { times.targetZ = currentMeta->Z; times.targetA = currentMeta->A; }
+        if (hasTimeColumns && (times.targetZ != currentMeta->Z || times.targetA != currentMeta->A)) {
+          throw std::runtime_error("Multiple targets in one time sample");
+        }
         hermesEvent.accepted = passesHermesDIS(*currentMeta, cfg);
       }
       inEvent = true;
@@ -1069,6 +1282,10 @@ void analyzeOscarFile(const std::string& path, const std::unordered_map<int, Met
     }
 
     if (isEventEnd(line)) {
+      const auto block = blockIdentity(line);
+      if (!inEvent || remaining != 0 || headerEvent != block[0] || headerEnsemble != block[1]) {
+        throw std::runtime_error("Mismatched event end or particle count in " + path);
+      }
       if (inEvent && currentMeta) finishHermesEvent(hermesEvent, *currentMeta, state.hermes);
       inEvent = false;
       currentEvent = -1;
@@ -1076,15 +1293,35 @@ void analyzeOscarFile(const std::string& path, const std::unordered_map<int, Met
       continue;
     }
 
-    if (!inEvent || !currentMeta || line[0] == '#') continue;
+    if (!inEvent || line[0] == '#') continue;
+    if (remaining <= 0) throw std::runtime_error("Particle outside declared out block in " + path);
+    --remaining;
+    ++times.particles;
+    if (!currentMeta) continue;
 
     Particle particle;
     if (!parseParticleLine(line, particle)) {
+      if (hasTimeColumns) throw std::runtime_error("Invalid OSCAR particle values in " + path);
       ++state.malformedParticleLines;
       continue;
     }
     analyzeParticle(particle, *currentMeta, cfg, state);
     analyzeHermesParticle(particle, *currentMeta, cfg, hermesEvent);
+    if (hasTimeColumns) {
+      try {
+        const auto fields = timeTokens(line);
+        if (fields.size() != columns.size()) throw std::runtime_error("Particle column count differs from header");
+        const int status = timeInteger(fields[columns.at("prod_time_status")]);
+        if (status < 0 || status > 2) throw std::runtime_error("prod_time_status must be 0, 1 or 2");
+        if (speciesIndex(particle.pdg) < 0 || particle.pdg == 111) continue;
+        if (status == 2) { ++times.spectators; continue; }
+        if (status == 0) { ++times.unavailable; continue; }
+        fillTimeParticle(particle, timeNumber(fields[columns.at("prod_time")]),
+                         timeNumber(fields[columns.at("form_time")]), *currentMeta, cfg, times);
+      } catch (const std::exception& error) {
+        throw std::runtime_error(path + ":" + std::to_string(lineNumber) + ": " + error.what());
+      }
+    }
   }
   if (inEvent) throw std::runtime_error("Unterminated OSCAR event in " + path);
 }
@@ -1197,7 +1434,7 @@ void writeHermesOutput(std::ostream& out, const HermesState& state, const Config
   }
 }
 
-void writeOutput(const std::string& path, const AnalysisState& state, const Config& cfg) {
+void writeOutput(const std::string& path, const AnalysisState& state, const Config& cfg, const TimeState& times) {
   std::ofstream out(path);
   if (!out) throw std::runtime_error("Cannot write output file: " + path);
 
@@ -1221,6 +1458,7 @@ void writeOutput(const std::string& path, const AnalysisState& state, const Conf
     writeHist(out, state.hQ2[is], std::string("/ELECTRA_MC_2026_DNDQ2/dN_dQ2_") + specTag(is), scaledBy);
   }
   writeHermesOutput(out, state.hermes, cfg);
+  writeTimeProfiles(out, cfg, times);
 }
 
 }  // namespace
@@ -1228,7 +1466,9 @@ void writeOutput(const std::string& path, const AnalysisState& state, const Conf
 int main(int argc, char** argv) {
   try {
     const Config cfg = parseArgs(argc, argv);
-    auto meta = loadMeta(cfg.metaPath);
+    validateInputPaths(cfg);
+    auto meta = loadMeta(cfg.metaPath, true);
+    TimeState times(cfg);
 
     AnalysisState state;
     for (std::size_t is = 0; is < NSPEC; ++is) {
@@ -1247,7 +1487,7 @@ int main(int argc, char** argv) {
     const std::size_t total = cfg.oscarPaths.size();
 
     for (std::size_t i = 0; i < total; ++i) {
-        analyzeOscarFile(cfg.oscarPaths[i], meta, cfg, state);
+        analyzeOscarFile(cfg.oscarPaths[i], meta, cfg, state, times);
 
         if (i % 100 == 0 || i + 1 == total) {
             std::cerr
@@ -1260,7 +1500,7 @@ int main(int argc, char** argv) {
     }
 
     finalize(state);
-    writeOutput(cfg.outPath, state, cfg);
+    writeOutput(cfg.outPath, state, cfg, times);
 
     std::cerr << "Loaded metadata entries: " << meta.size() << "\n";
     std::cerr << "Events seen:            " << state.eventsSeen << "\n";
@@ -1276,6 +1516,8 @@ int main(int argc, char** argv) {
     std::cerr << "Filled dN/dnu entries:    " << state.filledNu << "\n";
     std::cerr << "Filled dN/dQ2 entries:    " << state.filledQ2 << "\n";
     std::cerr << "Malformed lines:        " << state.malformedParticleLines << "\n";
+    std::cerr << "Time-profile hadrons:    " << times.accepted << "\n";
+    std::cerr << "Events without time columns: " << times.missingColumnEvents << "\n";
     std::cerr << "Wrote:                  " << cfg.outPath << "\n";
   } catch (const std::exception& ex) {
     std::cerr << "error: " << ex.what() << "\n\n";
