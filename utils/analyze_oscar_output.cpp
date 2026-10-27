@@ -6,9 +6,13 @@
 // Also produces:
 //   (1/Nevt) dN/(dQ2 dz_h) vs Q2 in fixed z_h slices, and
 //   (1/Nevt) dN/(dxB dz_h) vs xB in fixed z_h slices.
+//   (1/Nevt) dN/dnu and (1/Nevt) dN/dQ2, integrated over z_h and pT.
+// Default z_h, nu, and Q2 axes match HERMES arXiv:0704.3270, Fig. 2.
+// Additional /HERMES_2007 histograms apply the Fig. 2 selection and retain
+// per-bin DIS denominators and event-level hadron-count second moments.
 //
 // Example:
-//   c++ -std=c++17 -O3 -march=native -Wall -Wextra -pedantic analyze_oscar_dndptdz_dndz.cpp -o analyze_oscar_dndptdz_dndz
+//   c++ -std=c++17 -O3 -Wall -Wextra -pedantic utils/analyze_oscar_output.cpp -o analyze_oscar_output
 
 #include <algorithm>
 #include <array>
@@ -196,9 +200,15 @@ enum class FrameChoice { LAB, TRF, BREIT };
 constexpr std::size_t NSPEC = 7;
 constexpr std::size_t NZ = 4;
 constexpr std::array<double, NZ + 1> Z_EDGES = {0.2, 0.3, 0.4, 0.6, 0.8};
-constexpr std::size_t NQ2 = 9;
-constexpr std::array<double, NQ2 + 1> Q2_EDGES = {1.0, 1.25, 1.5, 1.75, 2.0,
-                                                   2.25, 2.5, 3.0, 5.0, 15.0};
+// HERMES Fig. 2 bin boundaries, from HEPData 10.17182/hepdata.13387.v1
+// (Tables 1, 4, and 8). Z_EDGES above retains the existing double-differential slices.
+constexpr std::array<double, 10> ZH_EDGES = {0.1, 0.2, 0.3, 0.4, 0.5,
+                                           0.6, 0.7, 0.8, 0.9, 1.3};
+constexpr std::array<double, 10> NU_EDGES = {4.0, 6.0, 8.0, 10.0, 12.0,
+                                           14.0, 16.0, 18.0, 20.0, 23.5};
+constexpr std::size_t NQ2 = 8;
+constexpr std::array<double, NQ2 + 1> Q2_EDGES = {1.0, 1.5, 2.0, 3.0, 4.0,
+                                                5.0, 6.0, 8.0, 25.0};
 constexpr std::size_t NXB = 9;
 constexpr std::array<double, NXB + 1> XB_EDGES = {0.023, 0.04, 0.055, 0.075, 0.1,
                                                   0.14, 0.2, 0.3, 0.4, 0.6};
@@ -542,6 +552,10 @@ struct Config {
   double zhMin = 0.05;
   double zhMax = 1.05;
   int zhNBins = 10;
+  bool uniformZhBins = false;
+  bool hermesAngularAcceptance = false;
+  double hermesBeamEnergy = 27.6;
+  int hermesBeamDirection = -1;
   double xfMin = 0.0;
   double xfMax = std::numeric_limits<double>::infinity();
   FrameChoice frame = FrameChoice::BREIT;
@@ -558,13 +572,22 @@ void printUsage(const char* argv0) {
       << "  --pt-min VALUE      pT histogram minimum in GeV (default: 0.0)\n"
       << "  --pt-max VALUE      pT histogram maximum in GeV (default: 1.1)\n"
       << "  --pt-nbins N        Number of pT bins (default: 20)\n"
-      << "  --zh-min VALUE      z_h histogram minimum for dN/dz_h (default: 0.05)\n"
-      << "  --zh-max VALUE      z_h histogram maximum for dN/dz_h (default: 1.05)\n"
-      << "  --zh-nbins N        Number of z_h bins for dN/dz_h (default: 10)\n"
-      << "  --xf-min VALUE      Minimum Feynman x in gamma*-target CM (default: 0.0)\n"
-      << "  --xf-max VALUE      Maximum Feynman x in gamma*-target CM (default: no upper cut)\n"
+      << "  --zh-min VALUE      Override with a uniform z_h axis; minimum (fallback: 0.05)\n"
+      << "  --zh-max VALUE      Override with a uniform z_h axis; maximum (fallback: 1.05)\n"
+      << "  --zh-nbins N        Override with a uniform z_h axis; bin count (fallback: 10)\n"
+      << "  --xf-min VALUE      Legacy spectra xF minimum (inactive in current build; 0.0)\n"
+      << "  --xf-max VALUE      Legacy spectra xF maximum (inactive in current build; no upper cut)\n"
       << "  --frame NAME        pT frame: LAB, TRF, or BREIT (default: BREIT)\n"
-      << "  --help              Show this help\n";
+      << "  --hermes-acceptance NAME  rectangular or none (default), for /HERMES_2007 only\n"
+      << "  --hermes-beam-energy E    Incoming lepton energy in target rest frame (GeV; 27.6)\n"
+      << "  --hermes-beam-direction AXIS  Incoming lepton axis: -z (default) or +z\n"
+      << "  --help              Show this help\n"
+      << "\nDefault axes (HERMES arXiv:0704.3270, Fig. 2):\n"
+      << "  z_h: 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.3\n"
+      << "  nu [GeV]: 4 6 8 10 12 14 16 18 20 23.5\n"
+      << "  Q2 [GeV^2]: 1 1.5 2 3 4 5 6 8 25\n"
+      << "Any --zh-* option selects a uniform z_h axis for the generic spectra.\n"
+      << "/HERMES_2007 outputs always use the fixed Fig. 2 cuts and binning.\n";
 }
 
 Config parseArgs(int argc, char** argv) {
@@ -592,10 +615,13 @@ Config parseArgs(int argc, char** argv) {
     } else if (arg == "--pt-nbins") {
       cfg.ptNBins = std::stoi(requireValue(arg));
     } else if (arg == "--zh-min") {
+      cfg.uniformZhBins = true;
       cfg.zhMin = std::stod(requireValue(arg));
     } else if (arg == "--zh-max") {
+      cfg.uniformZhBins = true;
       cfg.zhMax = std::stod(requireValue(arg));
     } else if (arg == "--zh-nbins") {
+      cfg.uniformZhBins = true;
       cfg.zhNBins = std::stoi(requireValue(arg));
     } else if (arg == "--xf-min") {
       cfg.xfMin = std::stod(requireValue(arg));
@@ -603,6 +629,20 @@ Config parseArgs(int argc, char** argv) {
       cfg.xfMax = std::stod(requireValue(arg));
     } else if (arg == "--frame") {
       cfg.frame = parseFrame(requireValue(arg));
+    } else if (arg == "--hermes-acceptance") {
+      const std::string value = requireValue(arg);
+      if (value != "rectangular" && value != "none") {
+        throw std::runtime_error("--hermes-acceptance must be rectangular or none");
+      }
+      cfg.hermesAngularAcceptance = value == "rectangular";
+    } else if (arg == "--hermes-beam-energy") {
+      cfg.hermesBeamEnergy = std::stod(requireValue(arg));
+    } else if (arg == "--hermes-beam-direction") {
+      const std::string value = requireValue(arg);
+      if (value != "-z" && value != "+z") {
+        throw std::runtime_error("--hermes-beam-direction must be -z or +z");
+      }
+      cfg.hermesBeamDirection = value == "-z" ? -1 : 1;
     } else if (!arg.empty() && arg[0] == '-') {
       throw std::runtime_error("Unknown option: " + arg);
     } else {
@@ -626,6 +666,9 @@ Config parseArgs(int argc, char** argv) {
   }
   if (cfg.zhNBins <= 0) throw std::runtime_error("--zh-nbins must be positive");
   if (!std::isfinite(cfg.xfMin)) throw std::runtime_error("--xf-min must be finite");
+  if (!std::isfinite(cfg.hermesBeamEnergy) || cfg.hermesBeamEnergy <= 0.000511) {
+    throw std::runtime_error("--hermes-beam-energy must exceed the electron mass");
+  }
   if (std::isnan(cfg.xfMax) || cfg.xfMax <= cfg.xfMin) {
     throw std::runtime_error("Invalid Feynman x cut: require --xf-max > --xf-min");
   }
@@ -724,11 +767,123 @@ bool parseParticleLine(const std::string& line, Particle& particle) {
 }
 
 
+struct HermesState {
+  std::array<Hist1D, NSPEC> z;
+  std::array<Hist1D, NSPEC> nu;
+  std::array<Hist1D, NSPEC> q2;
+  Hist1D disZ{std::vector<double>(ZH_EDGES.begin(), ZH_EDGES.end())};
+  Hist1D disNu{std::vector<double>(NU_EDGES.begin(), NU_EDGES.end())};
+  Hist1D disQ2{std::vector<double>(Q2_EDGES.begin(), Q2_EDGES.end())};
+  std::size_t acceptedDIS = 0;
+
+  HermesState() {
+    for (std::size_t is = 0; is < NSPEC; ++is) {
+      z[is] = Hist1D(std::vector<double>(ZH_EDGES.begin(), ZH_EDGES.end()));
+      nu[is] = Hist1D(std::vector<double>(NU_EDGES.begin(), NU_EDGES.end()));
+      q2[is] = Hist1D(std::vector<double>(Q2_EDGES.begin(), Q2_EDGES.end()));
+    }
+  }
+};
+
+struct HermesEvent {
+  bool accepted = false;
+  std::array<std::array<double, ZH_EDGES.size() - 1>, NSPEC> z{};
+  std::array<std::array<double, NU_EDGES.size() - 1>, NSPEC> nu{};
+  std::array<std::array<double, Q2_EDGES.size() - 1>, NSPEC> q2{};
+};
+
+template <std::size_t N>
+int edgeBin(double x, const std::array<double, N>& edges) {
+  if (!std::isfinite(x) || x < edges.front() || x >= edges.back()) return -1;
+  return static_cast<int>(std::upper_bound(edges.begin(), edges.end(), x) - edges.begin()) - 1;
+}
+
+bool inHermesAcceptance(const FourVec& p, const Config& cfg) {
+  const double longitudinal = cfg.hermesBeamDirection * p.pz;
+  if (longitudinal <= 0.0 || !std::isfinite(longitudinal)) return false;
+  const double tx = std::abs(std::atan2(p.px, longitudinal));
+  const double ty = std::abs(std::atan2(p.py, longitudinal));
+  return tx < 0.170 && ty > 0.040 && ty < 0.140;
+}
+
+bool passesHermesDIS(const MetaDIS& meta, const Config& cfg) {
+  const FourVec total{meta.P.E + meta.q.E, meta.P.px + meta.q.px,
+                      meta.P.py + meta.q.py, meta.P.pz + meta.q.pz};
+  if (!(meta.Q2 > 1.0 && minkowskiDot(total, total) > 4.0 &&
+        meta.y > 0.0 && meta.y < 0.85 && meta.nu > 0.0)) return false;
+  if (!cfg.hermesAngularAcceptance) return true;
+
+  // q = k - k'. Beam energy and signed z axis are specified in the target rest frame.
+  FourVec dummy, q = meta.q, P = meta.P;
+  toFrame(FrameChoice::TRF, dummy, q, P);
+  constexpr double electronMass = 0.00051099895;
+  const double beamP = std::sqrt(cfg.hermesBeamEnergy * cfg.hermesBeamEnergy - electronMass * electronMass);
+  const FourVec scattered{cfg.hermesBeamEnergy - q.E, -q.px, -q.py,
+                          cfg.hermesBeamDirection * beamP - q.pz};
+  return scattered.E > electronMass && inHermesAcceptance(scattered, cfg);
+}
+
+void analyzeHermesParticle(const Particle& particle, const MetaDIS& meta,
+                          const Config& cfg, HermesEvent& event) {
+  if (!event.accepted) return;
+  const int species = speciesIndex(particle.pdg);
+  if (species < 0) return;
+  const double Pdotq = minkowskiDot(meta.P, meta.q);
+  if (!(Pdotq > 0.0)) return;
+  const double zh = minkowskiDot(meta.P, particle.p) / Pdotq;
+  const double xf = feynmanX(particle.p, meta.P, meta.q);
+  if (!std::isfinite(zh) || !std::isfinite(xf) || xf <= 0.0) return;
+
+  FourVec ph = particle.p, q = meta.q, P = meta.P;
+  toFrame(FrameChoice::TRF, ph, q, P);
+  const double momentum = mag(p3(ph));
+  const double minimum = particle.pdg == 111 ? 2.5 : 2.0;
+  if (!std::isfinite(momentum) || momentum <= minimum || momentum >= 15.0) return;
+  if (cfg.hermesAngularAcceptance && !inHermesAcceptance(ph, cfg)) return;
+
+  const auto is = static_cast<std::size_t>(species);
+  const int iz = edgeBin(zh, ZH_EDGES);
+  const int inu = edgeBin(meta.nu, NU_EDGES);
+  const int iq2 = edgeBin(meta.Q2, Q2_EDGES);
+  if (meta.nu > 6.0 && zh > 0.1 && iz >= 0) ++event.z[is][iz];
+  if (meta.nu > 4.0 && zh > 0.2 && inu >= 0) ++event.nu[is][inu];
+  if (meta.nu > 6.0 && zh > 0.2 && iq2 >= 0) ++event.q2[is][iq2];
+}
+
+void finishHermesEvent(const HermesEvent& event, const MetaDIS& meta, HermesState& state) {
+  if (!event.accepted) return;
+  ++state.acceptedDIS;
+  if (meta.nu > 4.0) state.disNu.fill(meta.nu);
+  if (meta.nu > 6.0) {
+    state.disQ2.fill(meta.Q2);
+    // Every z bin uses the same inclusive DIS sample, including zero-hadron events.
+    for (int ib = 0; ib < state.disZ.nbins; ++ib) {
+      state.disZ.fill(0.5 * (state.disZ.lowEdge(ib) + state.disZ.highEdge(ib)));
+    }
+  }
+  for (std::size_t is = 0; is < NSPEC; ++is) {
+    for (auto pair : {std::make_pair(&state.z[is], event.z[is].data()),
+                      std::make_pair(&state.nu[is], event.nu[is].data()),
+                      std::make_pair(&state.q2[is], event.q2[is].data())}) {
+      Hist1D& h = *pair.first;
+      for (int ib = 0; ib < h.nbins; ++ib) {
+        if (pair.second[ib] > 0.0) {
+          // One weighted fill per event/bin: sumw2 records sum of squared event counts.
+          h.fill(0.5 * (h.lowEdge(ib) + h.highEdge(ib)), pair.second[ib]);
+        }
+      }
+    }
+  }
+}
+
 struct AnalysisState {
+  HermesState hermes;
   std::array<std::array<Hist1D, NZ>, NSPEC> hPtZ;
   std::array<std::array<Hist1D, NZ>, NSPEC> hQ2Z;
   std::array<std::array<Hist1D, NZ>, NSPEC> hXBZ;
   std::array<Hist1D, NSPEC> hZ;
+  std::array<Hist1D, NSPEC> hNu;
+  std::array<Hist1D, NSPEC> hQ2;
   std::size_t eventsSeen = 0;
   std::size_t eventsWithMeta = 0;
   std::size_t eventsVetoed = 0;
@@ -736,6 +891,8 @@ struct AnalysisState {
   std::size_t filledQ2Z = 0;
   std::size_t filledXBZ = 0;
   std::size_t filledZ = 0;
+  std::size_t filledNu = 0;
+  std::size_t filledQ2 = 0;
   std::size_t particlesSeen = 0;
   std::size_t particlesRejectedXF = 0;
   std::size_t malformedParticleLines = 0;
@@ -829,6 +986,10 @@ void analyzeParticle(const Particle& particle, const MetaDIS& meta, const Config
 
   state.hZ[static_cast<std::size_t>(is)].fill(zh, 1.0);
   ++state.filledZ;
+  state.hNu[static_cast<std::size_t>(is)].fill(meta.nu, 1.0);
+  ++state.filledNu;
+  state.hQ2[static_cast<std::size_t>(is)].fill(meta.Q2, 1.0);
+  ++state.filledQ2;
 
   const int iz = zbinIndex(zh);
   if (iz >= 0) {
@@ -881,6 +1042,7 @@ void analyzeOscarFile(const std::string& path, const std::unordered_map<int, Met
   const bool hasFilenameEvent = eventIdFromFilename(path, filenameEvent);
   const MetaDIS* currentMeta = nullptr;
   bool inEvent = false;
+  HermesEvent hermesEvent;
 
   while (std::getline(in, line)) {
     //line = trim(line);
@@ -888,6 +1050,9 @@ void analyzeOscarFile(const std::string& path, const std::unordered_map<int, Met
 
     int eventNumber = -1;
     if (parseEventHeader(line, eventNumber)) {
+      if (inEvent) throw std::runtime_error("Multiple out blocks before event end in " + path +
+                                            "; supply final-only OSCAR particle lists");
+      hermesEvent = HermesEvent{};
       ++state.eventsSeen;
       currentEvent = hasFilenameEvent ? filenameEvent : eventNumber;
       const auto it = meta.find(currentEvent);
@@ -897,12 +1062,14 @@ void analyzeOscarFile(const std::string& path, const std::unordered_map<int, Met
       } else {
         ++state.eventsWithMeta;
         currentMeta = &it->second;
+        hermesEvent.accepted = passesHermesDIS(*currentMeta, cfg);
       }
       inEvent = true;
       continue;
     }
 
     if (isEventEnd(line)) {
+      if (inEvent && currentMeta) finishHermesEvent(hermesEvent, *currentMeta, state.hermes);
       inEvent = false;
       currentEvent = -1;
       currentMeta = nullptr;
@@ -917,7 +1084,9 @@ void analyzeOscarFile(const std::string& path, const std::unordered_map<int, Met
       continue;
     }
     analyzeParticle(particle, *currentMeta, cfg, state);
+    analyzeHermesParticle(particle, *currentMeta, cfg, hermesEvent);
   }
+  if (inEvent) throw std::runtime_error("Unterminated OSCAR event in " + path);
 }
 
 void finalize(AnalysisState& state) {
@@ -942,13 +1111,17 @@ void finalize(AnalysisState& state) {
         hxb.scaleBinOnly(ib, 1.0 / (hxb.width(ib) * dz));
       }
     }
-    Hist1D& hz = state.hZ[is];
-    hz.scale(1.0 / nEvents);
-    hz.scaleBinsOnly(1.0 / hz.width());
+    for (Hist1D* h : {&state.hZ[is], &state.hNu[is], &state.hQ2[is]}) {
+      h->scale(1.0 / nEvents);
+      for (int ib = 0; ib < h->nbins; ++ib) {
+        h->scaleBinOnly(ib, 1.0 / h->width(ib));
+      }
+    }
   }
 }
 
-void writeHist(std::ostream& out, const Hist1D& h, const std::string& path, double scaledBy) {
+void writeHist(std::ostream& out, const Hist1D& h, const std::string& path, double scaledBy,
+               const std::string& annotations = "") {
   double totalW = 0.0;
   double totalW2 = 0.0;
   double totalWX = 0.0;
@@ -971,9 +1144,12 @@ void writeHist(std::ostream& out, const Hist1D& h, const std::string& path, doub
   out << "ScaledBy: " << std::setprecision(18) << scaledBy << "\n";
   out << "Title:\n";
   out << "Type: Histo1D\n";
+  out << annotations;
   out << "---\n";
   out << "# Mean: " << std::scientific << std::setprecision(6) << mean << "\n";
   out << "# Area: " << std::scientific << std::setprecision(6) << area << "\n";
+  // Retain event-count moments accurately when computing a small SEM from a large sample.
+  out << std::setprecision(annotations.empty() ? 6 : 17);
   out << "# ID\t ID\t sumw\t sumw2\t sumwx\t sumwx2\t numEntries\n";
   out << "Total   \tTotal   \t" << totalW << "\t" << totalW2 << "\t" << totalWX << "\t" << totalWX2
       << "\t" << totalEntries << "\n";
@@ -992,7 +1168,36 @@ void writeHist(std::ostream& out, const Hist1D& h, const std::string& path, doub
   out << "END YODA_HISTO1D_V2\n\n";
 }
 
-void writeOutput(const std::string& path, const AnalysisState& state) {
+void writeHermesOutput(std::ostream& out, const HermesState& state, const Config& cfg) {
+  const std::string annotations = "Selection: HERMES_2007_FIG2_V1\nAcceptance: " +
+      std::string(cfg.hermesAngularAcceptance ? "rectangular" : "none") +
+      "\nBeamEnergyGeV: " + std::to_string(cfg.hermesBeamEnergy) +
+      "\nBeamDirection: " + (cfg.hermesBeamDirection < 0 ? "-z" : "+z") + "\n";
+  const std::array<const Hist1D*, 3> dis = {&state.disZ, &state.disNu, &state.disQ2};
+  const std::array<const std::array<Hist1D, NSPEC>*, 3> hadrons = {&state.z, &state.nu, &state.q2};
+  const std::array<std::string, 3> names = {"zh", "nu", "Q2"};
+  for (std::size_t axis = 0; axis < names.size(); ++axis) {
+    const std::string base = "/HERMES_2007/" + names[axis];
+    writeHist(out, *dis[axis], base + "/DIS", 1.0, annotations);
+    for (std::size_t is = 0; is < NSPEC; ++is) {
+      const Hist1D& counts = (*hadrons[axis])[is];
+      writeHist(out, counts, base + "/counts_" + specTag(is), 1.0, annotations);
+      Hist1D multiplicity = counts;
+      for (int ib = 0; ib < counts.nbins; ++ib) {
+        const double n = dis[axis]->sumw[ib];
+        const double width = axis == 0 ? counts.width(ib) : 1.0;
+        const double mean = n > 0.0 ? counts.sumw[ib] / n : 0.0;
+        const double variance = n > 1.0
+            ? std::max(0.0, counts.sumw2[ib] - counts.sumw[ib] * mean) / (n * (n - 1.0)) : 0.0;
+        multiplicity.scaleBinOnly(ib, n > 0.0 ? 1.0 / (n * width) : 0.0);
+        multiplicity.sumw2[ib] = variance / (width * width);
+      }
+      writeHist(out, multiplicity, base + "/multiplicity_" + specTag(is), 1.0, annotations);
+    }
+  }
+}
+
+void writeOutput(const std::string& path, const AnalysisState& state, const Config& cfg) {
   std::ofstream out(path);
   if (!out) throw std::runtime_error("Cannot write output file: " + path);
 
@@ -1012,7 +1217,10 @@ void writeOutput(const std::string& path, const AnalysisState& state) {
     }
     const std::string histPath = std::string("/ELECTRA_MC_2026_DNDZ/dN_dz_") + specTag(is);
     writeHist(out, state.hZ[is], histPath, scaledBy);
+    writeHist(out, state.hNu[is], std::string("/ELECTRA_MC_2026_DNDNU/dN_dnu_") + specTag(is), scaledBy);
+    writeHist(out, state.hQ2[is], std::string("/ELECTRA_MC_2026_DNDQ2/dN_dQ2_") + specTag(is), scaledBy);
   }
+  writeHermesOutput(out, state.hermes, cfg);
 }
 
 }  // namespace
@@ -1029,7 +1237,11 @@ int main(int argc, char** argv) {
         state.hQ2Z[is][iz] = Hist1D(std::vector<double>(Q2_EDGES.begin(), Q2_EDGES.end()));
         state.hXBZ[is][iz] = Hist1D(std::vector<double>(XB_EDGES.begin(), XB_EDGES.end()));
       }
-      state.hZ[is] = Hist1D(cfg.zhNBins, cfg.zhMin, cfg.zhMax);
+      state.hZ[is] = cfg.uniformZhBins
+                        ? Hist1D(cfg.zhNBins, cfg.zhMin, cfg.zhMax)
+                        : Hist1D(std::vector<double>(ZH_EDGES.begin(), ZH_EDGES.end()));
+      state.hNu[is] = Hist1D(std::vector<double>(NU_EDGES.begin(), NU_EDGES.end()));
+      state.hQ2[is] = Hist1D(std::vector<double>(Q2_EDGES.begin(), Q2_EDGES.end()));
     }
 
     const std::size_t total = cfg.oscarPaths.size();
@@ -1048,18 +1260,21 @@ int main(int argc, char** argv) {
     }
 
     finalize(state);
-    writeOutput(cfg.outPath, state);
+    writeOutput(cfg.outPath, state, cfg);
 
     std::cerr << "Loaded metadata entries: " << meta.size() << "\n";
     std::cerr << "Events seen:            " << state.eventsSeen << "\n";
     std::cerr << "Events with metadata:   " << state.eventsWithMeta << "\n";
     std::cerr << "Events vetoed:          " << state.eventsVetoed << "\n";
+    std::cerr << "HERMES accepted DIS:    " << state.hermes.acceptedDIS << "\n";
     std::cerr << "Particles seen:         " << state.particlesSeen << "\n";
     std::cerr << "Particles rejected xF:  " << state.particlesRejectedXF << "\n";
     std::cerr << "Filled dN/dpT/dz entries: " << state.filledPtZ << "\n";
     std::cerr << "Filled dN/dQ2/dz entries: " << state.filledQ2Z << "\n";
     std::cerr << "Filled dN/dxB/dz entries: " << state.filledXBZ << "\n";
     std::cerr << "Filled dN/dz entries:     " << state.filledZ << "\n";
+    std::cerr << "Filled dN/dnu entries:    " << state.filledNu << "\n";
+    std::cerr << "Filled dN/dQ2 entries:    " << state.filledQ2 << "\n";
     std::cerr << "Malformed lines:        " << state.malformedParticleLines << "\n";
     std::cerr << "Wrote:                  " << cfg.outPath << "\n";
   } catch (const std::exception& ex) {

@@ -15,9 +15,12 @@ Options can also be supplied as environment variables:
   SLURM_CONFIG, PROJECT_ROOT, OUTPUT_HOST, RUNS_DIR, RUN_DIR, ACCOUNT, PARTITION,
   INDEX_TIME_LIMIT, ANALYSIS_TIME_LIMIT, CPUS_PER_TASK, MEMORY, ANALYZER,
   OSCAR_PATTERN, PT_MIN, PT_MAX, PT_NBINS, ZH_MIN, ZH_MAX, ZH_NBINS,
-  FRAME, OUT, SKIP_INDEXING, SUBRUN_LABEL
+  FRAME, HERMES_ACCEPTANCE, HERMES_BEAM_ENERGY, HERMES_BEAM_DIRECTION,
+  OUT, SKIP_INDEXING, SUBRUN_LABEL
 
 Set SKIP_INDEXING=1 to reuse an existing FILE_LIST and submit only the analysis job.
+The default z_h axis uses HERMES Fig. 2 edges. Setting any ZH_* axis option
+selects uniform bins (fallbacks: ZH_MIN=0.05, ZH_MAX=0.95, ZH_NBINS=9).
 EOF
 }
 
@@ -99,10 +102,13 @@ OSCAR_PATTERN="${OSCAR_PATTERN:-*.oscar}"
 PT_MIN="${PT_MIN:-0.0}"
 PT_MAX="${PT_MAX:-1.1}"
 PT_NBINS="${PT_NBINS:-10}"
-ZH_MIN="${ZH_MIN:-0.05}"
-ZH_MAX="${ZH_MAX:-0.95}"
-ZH_NBINS="${ZH_NBINS:-9}"
+ZH_MIN="${ZH_MIN:-}"
+ZH_MAX="${ZH_MAX:-}"
+ZH_NBINS="${ZH_NBINS:-}"
 FRAME="${FRAME:-LAB}"
+HERMES_ACCEPTANCE="${HERMES_ACCEPTANCE:-none}"
+HERMES_BEAM_ENERGY="${HERMES_BEAM_ENERGY:-27.6}"
+HERMES_BEAM_DIRECTION="${HERMES_BEAM_DIRECTION:--z}"
 
 if [[ -n "${RUN_DIR:-}" ]]; then
     :
@@ -207,13 +213,13 @@ fi
 # -----------------------------
 # Step 2: run analysis after indexing succeeds
 # -----------------------------
-SBATCH_DEPENDENCY=()
+SBATCH_ARGS=(--parsable)
 if [[ -n "$INDEX_JOB_ID" ]]; then
-    SBATCH_DEPENDENCY=(--dependency=afterok:${INDEX_JOB_ID})
+    SBATCH_ARGS+=(--dependency=afterok:${INDEX_JOB_ID})
 fi
 
 ANALYSIS_JOB_ID=$(
-sbatch --parsable "${SBATCH_DEPENDENCY[@]}" <<EOF
+sbatch "${SBATCH_ARGS[@]}" <<EOF
 #!/bin/bash
 #SBATCH -J ${JOB_NAME}:run
 #SBATCH -A ${ACCOUNT}
@@ -237,6 +243,15 @@ ZH_MIN="${ZH_MIN}"
 ZH_MAX="${ZH_MAX}"
 ZH_NBINS="${ZH_NBINS}"
 FRAME="${FRAME}"
+HERMES_ACCEPTANCE="${HERMES_ACCEPTANCE}"
+HERMES_BEAM_ENERGY="${HERMES_BEAM_ENERGY}"
+HERMES_BEAM_DIRECTION="${HERMES_BEAM_DIRECTION}"
+
+AXIS_ARGS=(--frame "\${FRAME}" --hermes-acceptance "\${HERMES_ACCEPTANCE}"
+           --hermes-beam-energy "\${HERMES_BEAM_ENERGY}" --hermes-beam-direction "\${HERMES_BEAM_DIRECTION}")
+if [[ -n "\${ZH_MIN}" || -n "\${ZH_MAX}" || -n "\${ZH_NBINS}" ]]; then
+    AXIS_ARGS+=(--zh-min "\${ZH_MIN:-0.05}" --zh-max "\${ZH_MAX:-0.95}" --zh-nbins "\${ZH_NBINS:-9}")
+fi
 
 "\${ANALYZER}" \
     --meta "\${META_FILE}" \
@@ -245,10 +260,7 @@ FRAME="${FRAME}"
     --pt-min "\${PT_MIN}" \
     --pt-max "\${PT_MAX}" \
     --pt-nbins "\${PT_NBINS}" \
-    --zh-min "\${ZH_MIN}" \
-    --zh-max "\${ZH_MAX}" \
-    --zh-nbins "\${ZH_NBINS}" \
-    --frame "\${FRAME}"
+    "\${AXIS_ARGS[@]}"
 EOF
 )
 
