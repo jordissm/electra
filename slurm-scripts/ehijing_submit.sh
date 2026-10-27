@@ -65,7 +65,7 @@ OUTPUT_CONT="${OUTPUT_CONT:-/workspace/output}"
 #   A: 2      A: 3      A: 12     A: 40     A: 56     A: 197
 Z=1 #36
 A=2 #84
-MED_MODIF_MODE=0
+MED_MODIF_MODE="${MED_MODIF_MODE:-1}" # Generalized Higher Twist; 0 selects Higher Twist.
 K=4.0
 # Optional shared-target controls; omit flags for older executable compatibility.
 NUCLEAR_ARGS=""
@@ -194,6 +194,7 @@ echo "Submitting eHIJING run:"
 echo "  run id       : $RUN_ID"
 echo "  run dir      : $EHIJING_RUN_DIR_CONT"
 echo "  total events : $NEVENTS"
+echo "  medium mode  : $MED_MODIF_MODE (0: HT, 1: GHT)"
 echo "  chunk size   : $CHUNK_SIZE"
 echo "  num chunks   : $NUM_CHUNKS"
 echo "  array range  : $ARRAY_RANGE"
@@ -245,7 +246,7 @@ DIS_CUTS_CONFIG_PATH="${DIS_CUTS_CONFIG_PATH}"
 
 Z="${Z:-1}"
 A="${A:-2}"
-MED_MODIF_MODE="${MED_MODIF_MODE:-0}"
+MED_MODIF_MODE="${MED_MODIF_MODE:-1}"
 K="${K:-4.0}"
 NEVENTS="${NEVENTS}"
 CHUNK_SIZE="${CHUNK_SIZE}"

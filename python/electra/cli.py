@@ -646,7 +646,8 @@ def build_parser() -> argparse.ArgumentParser:
     per = spe.add_parser("run")
     per.add_argument("--Z", type=int, default=1)
     per.add_argument("--A", type=int, default=2)
-    per.add_argument("--medium-modification-mode", type=int, default=0)
+    per.add_argument("--medium-modification-mode", type=int, default=1,
+                     help="Medium modification: 1 = Generalized Higher Twist (default), 0 = Higher Twist")
     per.add_argument("--K", type=float, default=4.0)
     per.add_argument("--run-path", required=True)
     per.add_argument("--number-of-events", type=int, required=True)

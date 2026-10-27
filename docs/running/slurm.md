@@ -22,9 +22,11 @@ per-event metadata into `ehijing/DISKinematics.meta.jsonl`.
 An explicit `RUN_ID` must be unused unless `OVERWRITE_RUN=true` is supplied.
 Prefer a new run ID for a new configuration.
 
-The script currently assigns `Z=1`, `A=2`, `MED_MODIF_MODE=0` and `K=4.0`
-inside its physical-parameter section. These assignments override corresponding
-environment values; inspect that section before using a different target/model.
+The script defaults to Generalized Higher Twist (`MED_MODIF_MODE=1`). Set
+`MED_MODIF_MODE=0` in `cluster.env`, the environment, or the submission arguments
+to select Higher Twist. Submission arguments take precedence over `cluster.env`.
+The physical-parameter section still assigns `Z=1`, `A=2` and `K=4.0` directly,
+overriding their environment values; inspect it before using a different target.
 Optional shared-target controls are passed through using `NUCLEAR_TARGET`,
 `NUCLEON_WIDTH_FM`, `NUCLEAR_RADIUS_FM` and `NUCLEAR_SURFACE_FM`.
 

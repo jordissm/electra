@@ -23,6 +23,9 @@ The shell binds the host input/output directories to `/workspace/input` and
 `/workspace/output`. The run path above ends in `ehijing` so that SMASH can
 find its events under the parent run directory. See [output layout](../outputs.md).
 
+The ELECTRA CLI defaults to Generalized Higher Twist (GHT), mode `1`.
+Add `--medium-modification-mode 0` to select Higher Twist (HT).
+
 Current eHIJING builds default to the shared nuclear target and disable
 HepMC history collection. Add `--history on` when you need
 [diagnostic histories](../_generated/history.md). Optional target controls

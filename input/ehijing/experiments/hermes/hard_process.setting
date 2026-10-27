@@ -49,5 +49,7 @@ PartonVertex:setVertex = off
 
 # eHIJING Switch
 eHIJING:all = on
+# Generalized Higher Twist (GHT); 0 selects Higher Twist (HT).
+eHIJING:MediumModificationSplittingFunctionMode = 1
 eHIJING:xG-n = 4.0
 eHIJING:xG-lambda = -0.25

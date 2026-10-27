@@ -31,6 +31,14 @@ The [CLI reference](reference/cli.md) is generated from the current Python
 argument parser. The wrapper forwards event counts, IDs, seeds, medium mode,
 `K`, target species, tabulation directory and the three settings paths to eHIJING.
 
+ELECTRA defaults to **Generalized Higher Twist (GHT)**, medium modification
+mode `1`, in the Python CLI, the HERMES hard-process settings, and the SLURM
+generation script. Use `--medium-modification-mode 0` locally or
+`MED_MODIF_MODE=0` on SLURM to select Higher Twist (HT). The executable's
+command-line mode overrides `eHIJING:MediumModificationSplittingFunctionMode`
+in the settings file, so choose the runtime option when changing models.
+The eHIJING implementation and its internal defaults are unchanged.
+
 `--seed` is an unsigned 64-bit ELECTRA master seed, from `0` through
 `18446744073709551615`. The Python defaults are `12345` for generation and
 `98765` for transport. The wrapper passes the generation master unchanged;
