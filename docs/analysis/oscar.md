@@ -120,10 +120,9 @@ Output:
 
 The repository's `input/smash/config_files/config.yaml` does not set
 `Only_Final`. Inspect the configuration and files used for your run. The
-analyzer counts **every `out` block** as an event; it does not select the last
-time snapshot. Files with intermediate snapshots therefore mix times and
-normalize by the number of snapshots. For existing files containing multiple
-times, prepare final-only particle lists while preserving event associations
+analyzer treats each final `out` block as an event. It rejects multiple `out`
+blocks before an event-end marker, rather than mixing intermediate snapshots.
+For existing files containing multiple times, prepare final-only particle lists while preserving event associations
 before running this analysis. Do not pass collision histories such as
 `full_event_history.oscar`.
 
@@ -140,7 +139,6 @@ find "$RUN_DIR/ehijing/events" -type f -name 'event_*.oscar' \
   --meta "$RUN_DIR/ehijing/DISKinematics.meta.jsonl" \
   --file-list "$RUN_DIR/ehijing/analysis/event_manifest.txt" \
   --frame LAB --pt-min 0.0 --pt-max 1.1 --pt-nbins 10 \
-  --zh-min 0.05 --zh-max 0.95 --zh-nbins 9 \
   --out "$RUN_DIR/ehijing/analysis/multiplicities.yoda" \
   2> "$RUN_DIR/ehijing/analysis/analyzer.log"
 ```
@@ -179,7 +177,6 @@ find "$RUN_DIR/smash/events" -type f \
   --meta "$RUN_DIR/ehijing/DISKinematics.meta.jsonl" \
   --file-list "$RUN_DIR/smash/analysis/$PROFILE/event_manifest.txt" \
   --frame LAB --pt-min 0.0 --pt-max 1.1 --pt-nbins 10 \
-  --zh-min 0.05 --zh-max 0.95 --zh-nbins 9 \
   --out "$RUN_DIR/smash/analysis/$PROFILE/multiplicities.yoda" \
   2> "$RUN_DIR/smash/analysis/$PROFILE/analyzer.log"
 ```
@@ -217,14 +214,145 @@ bash slurm-scripts/analysis_submit.sh RUN_ID=6 RUN_DIR="$RUN_DIR" \
   ANALYZER="$ANALYZER" SUBRUN_LABEL=smash --skip-indexing \
   FILE_LIST="$RUN_DIR/smash/analysis/$PROFILE/event_manifest.txt" \
   ANALYSIS_DIR="$RUN_DIR/smash/analysis/$PROFILE" \
-  PT_MIN=0.0 PT_MAX=1.1 PT_NBINS=10 \
-  ZH_MIN=0.05 ZH_MAX=0.95 ZH_NBINS=9 FRAME=LAB
+  PT_MIN=0.0 PT_MAX=1.1 PT_NBINS=10 FRAME=LAB
 ```
 
 `FILE_LIST` must already exist and be nonempty when using `--skip-indexing`.
 The default output is `ANALYSIS_DIR/multiplicities.yoda`, with scheduler logs
 in `ANALYSIS_DIR/logs`. `OUT`, `META_FILE`, and `LOG_DIR` can override these
 paths. The wrapper does not compile the analyzer.
+
+## HERMES Fig. 2 binning
+
+By default, the inclusive $z_h$, $\nu$, and $Q^2$ spectra use the bin edges
+for Fig. 2 of [HERMES, arXiv:0704.3270](https://arxiv.org/abs/0704.3270).
+The boundaries are taken from HEPData
+[Table 1](https://doi.org/10.17182/hepdata.13387.v1/t1),
+[Table 4](https://doi.org/10.17182/hepdata.13387.v1/t4), and
+[Table 8](https://doi.org/10.17182/hepdata.13387.v1/t8), also stored under
+`analysis/experimental_data/HERMES/R_A/He/`:
+
+| Axis | Bin edges |
+| --- | --- |
+| $z_h$ | `0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.3` |
+| $\nu$ [GeV] | `4, 6, 8, 10, 12, 14, 16, 18, 20, 23.5` |
+| $Q^2$ [GeV²] | `1, 1.5, 2, 3, 4, 5, 6, 8, 25` |
+
+The same $Q^2$ edges apply to the existing fixed-$z_h$ double-differential
+spectra. Each bin is normalized by its own width, including the wider last
+bin. The $p_T$ and $x_B$ axes and the four fixed $z_h$ slices are unchanged.
+
+Supplying any `--zh-min`, `--zh-max`, or `--zh-nbins` option selects a custom
+uniform inclusive $z_h$ axis instead. Unspecified values then retain the legacy
+executable fallbacks: minimum `0.05`, maximum `1.05`, and `10` bins. For example,
+`--zh-min 0.05 --zh-max 0.95 --zh-nbins 9` reproduces the former SLURM axis.
+The wrapper uses the HERMES edges unless any `ZH_MIN`, `ZH_MAX`, or `ZH_NBINS`
+is supplied; in that case its uniform fallbacks are `0.05`, `0.95`, and `9`.
+Remove old explicit axis arguments to use the new default edges.
+
+The existing `/ELECTRA_MC_2026_*` spectra retain their original inclusive
+selection and global normalization. The analyzer additionally writes dedicated
+`/HERMES_2007/` spectra with the Fig. 2 selections and DIS normalization below.
+Use these dedicated outputs for the nuclear ratios. Their axes are fixed to
+the table above and are unaffected by the generic `--zh-*`, `--pt-*`, `--xf-*`,
+or `--frame` options.
+
+## Fig. 2 selections and multiplicity ratios
+
+The dedicated HERMES outputs check $Q^2>1$ GeV², $W^2=(P+q)^2>4$ GeV²,
+and $0<y<0.85$. No additional $x_B$ bound or generator setting is imposed.
+The hadron selection requires $x_F>0$ in the photon–target center-of-mass
+frame and $2<p<15$ GeV for charged hadrons. Momentum is evaluated in the
+rest frame of metadata `P4`, corresponding to the HERMES fixed-target lab.
+The tracked neutral pion has a 2.5 GeV lower momentum limit; photon
+reconstruction and detector efficiency are not simulated. Fig. 2 itself
+uses `pip`, `kp`, and `p`.
+
+| Output axis | Event selection | Hadron selection |
+| --- | --- | --- |
+| `nu` | $\nu>4$ GeV | $z_h>0.2$ |
+| `zh` | $\nu>6$ GeV | $z_h>0.1$ |
+| `Q2` | $\nu>6$ GeV | $z_h>0.2$ |
+
+These column-specific thresholds are strict. For example, a hadron in the
+first $z_h$ bin contributes to the `zh` spectrum but not the `nu` or `Q2`
+spectra. The cut definitions follow sections 4–5 and the Fig. 2 caption of
+the paper. There is no extra $p_T$ cut or $x_F$ upper bound.
+
+Each axis writes these paths, where `AXIS` is `zh`, `nu`, or `Q2`:
+
+| Path | Content |
+| --- | --- |
+| `/HERMES_2007/AXIS/DIS` | Raw accepted DIS counts, including zero-hadron events |
+| `/HERMES_2007/AXIS/counts_TAG` | Raw hadron counts; `sumw2` is the sum of squared event-level counts |
+| `/HERMES_2007/AXIS/multiplicity_TAG` | Hadron yield divided by the matching DIS count |
+
+The `nu` and `Q2` multiplicities are $N_h/N_\mathrm{DIS}$ in each leptonic
+bin. For `zh`, every DIS row contains the same $\nu>6$ event count, and the
+multiplicity is $N_h/(N_\mathrm{DIS}\,\Delta z_h)$. Form
+$R_A^h=M_A^h/M_D^h$ using independently analyzed nucleus and deuterium files.
+Do not divide generic globally normalized densities to obtain these ratios.
+
+Uncertainties use the standard error of the event-level hadron multiplicity,
+including zero counts. With $N$ accepted DIS events, $S=\sum_e n_e$ and
+$S_2=\sum_e n_e^2$, the variance of the mean is
+$(S_2-S^2/N)/(N(N-1))$. The `zh` density also divides the error by
+$\Delta z_h$. Transport replicas are treated as separate events; correlations
+between replicas of one physical input are not included. The plotting loader
+omits bins with no DIS exposure or zero deuterium yield, preserves zero
+nuclear yields, and leaves errors undefined for bins with only one DIS event.
+The written multiplicity histograms use zero placeholders for bins with no
+DIS events and for uncertainties with fewer than two DIS events; inspect the
+associated `DIS` histogram or use the loader to distinguish these cases.
+
+Angular acceptance is **off by default**, as selected for this workflow.
+Use `--hermes-acceptance rectangular` to apply $|\theta_x|<170$ mrad and
+$40<|\theta_y|<140$ mrad to hadrons and the scattered lepton. This is a
+geometric window, not a detector response simulation. The optional scattered
+lepton is reconstructed as $k'=k-q$ in the target rest frame, using a 27.6 GeV
+incoming lepton along `-z` by default, matching ELECTRA's HERMES beam convention.
+`--hermes-beam-energy` and `--hermes-beam-direction +z` configure the other
+supported beam convention. On SLURM, use `HERMES_ACCEPTANCE`,
+`HERMES_BEAM_ENERGY`, and `HERMES_BEAM_DIRECTION` respectively.
+
+## Plot Fig. 2 and R_A
+
+Recompile the analyzer and regenerate each target/scenario's YODA file. Old
+files lack the required raw counts, DIS denominators, and selection metadata;
+the updated ratio scripts reject them rather than reusing inclusive spectra.
+The model-comparison input paths are configured in
+`analysis/scripts/model_comparison/R_A/RA_vs_zh_inputs.yaml`.
+
+From the repository root, with Matplotlib installed:
+
+```bash
+python3 analysis/scripts/plot_hermes_fig2.py \
+  --config analysis/scripts/model_comparison/R_A/RA_vs_zh_inputs.yaml \
+  --output-dir /path/to/plots
+```
+
+This writes `RA_fig2.pdf` and `RA_fig2.png`: three rows for $\pi^+$, $K^+$,
+and $p$, and three columns for $\nu$, $z_h$, and $Q^2$. It overlays the nuclei
+and configured model scenarios with the corresponding HERMES tables. Use
+`--no-exp` to omit data. Experimental abscissae are the paper's quoted bin
+means; neither target ratios nor data comparisons interpolate between bins.
+
+The existing wrappers now also generate this figure:
+
+```bash
+bash analysis/run_HERMES_model_comparison_plot_scripts_R_A.sh
+bash analysis/run_HERMES_cross_section_profile_comparison_plot_scripts_R_A.sh
+```
+
+The cross-section profile wrapper uses its own `RA_vs_zh_inputs.yaml`; its profile
+directory can contain `profile_*.yoda` or `tau*.yoda` files, paired by filename
+between deuterium and each nucleus. For a direct invocation, supply that
+config with `--comparison cross-section-profile` (`formation-time` remains a
+compatibility alias). Existing $R_A(z_h)$ grids and the
+poster script use the same selected event counts and exact bin alignment.
+Different selection/acceptance/beam annotations across targets are rejected.
+The separate `e_d` plotting scripts continue to read the generic spectra for
+their existing multiplicity comparisons.
 
 ## Options and observables
 
@@ -238,14 +366,17 @@ shown in the examples:
 | Positional paths | None | One or more OSCAR particle-list files |
 | `--out PATH` | `dndptdz_dndz.yoda` | Output histogram file |
 | `--frame NAME` | `BREIT` | `LAB`, `TRF`, or `BREIT`; lowercase also accepted |
+| `--hermes-acceptance NAME` | `none` | Optional `rectangular` angular window for dedicated HERMES histograms |
+| `--hermes-beam-energy E` | `27.6` | Incoming lepton energy in GeV for optional acceptance |
+| `--hermes-beam-direction AXIS` | `-z` | Incoming lepton axis in target rest frame: `-z` or `+z` |
 | `--pt-min`, `--pt-max`, `--pt-nbins` | `0.0`, `1.1`, `20` | Uniform transverse-momentum axis in GeV |
-| `--zh-min`, `--zh-max`, `--zh-nbins` | `0.05`, `1.05`, `10` | Uniform axis for the inclusive $z_h$ spectrum |
+| `--zh-min`, `--zh-max`, `--zh-nbins` | HERMES edges above | Any of these selects a uniform inclusive $z_h$ axis |
 | `--xf-min`, `--xf-max` | `0.0`, no upper limit | Parsed, but inactive in the current source |
 | `--help`, `-h` | — | Show usage and exit |
 
 At least one input file is required. Axis limits must be finite and increasing,
 and bin counts positive. The wrapper defaults to `FRAME=LAB`, `PT_NBINS=10`,
-`ZH_MAX=0.95`, and `ZH_NBINS=9`.
+and the same HERMES inclusive $z_h$ edges as the executable.
 
 The analyzer tracks only these species:
 
@@ -286,20 +417,22 @@ Four fixed slices are used for all double-differential distributions:
 
 Values exactly on these slice boundaries are excluded. `--zh-*` controls only
 the inclusive spectrum; it does not change the fixed slices. The fixed $Q^2$
-edges in GeV² are `1, 1.25, 1.5, 1.75, 2, 2.25, 2.5, 3, 5, 15`, and the
+edges in GeV² are `1, 1.5, 2, 3, 4, 5, 6, 8, 25`, and the
 fixed $x_B$ edges are `0.023, 0.04, 0.055, 0.075, 0.1, 0.14, 0.2, 0.3, 0.4, 0.6`.
 Histogram bins include the lower edge and exclude the upper edge.
 
 The current source has `APPLY_XF_CUT = false` and
 `APPLY_PID_MOMENTUM_CUT = false`. Thus `--xf-*` does not select particles, and
-no species-dependent momentum cut is applied. The analyzer adds no DIS event
-cuts; the sample retains its generator selection. The $p_T$ axis limits do
-not restrict the inclusive $z_h$, $Q^2$, or $x_B$ spectra. These spectra include
+no species-dependent momentum cut is applied to the generic spectra. The generic
+outputs add no DIS event cuts; the dedicated HERMES outputs apply the selection
+above independently of these compile-time switches. The $p_T$ axis limits do
+not restrict the inclusive spectra or the sliced $Q^2$ and $x_B$ spectra. These include
 all transverse momenta of the accepted species.
 
 ## Read and normalize the output
 
-Each run writes 91 `YODA_HISTO1D_V2` blocks: thirteen per species. The paths are:
+Each run writes 150 `YODA_HISTO1D_V2` blocks: the 45 dedicated HERMES blocks
+above plus 105 generic blocks (fifteen per species). The generic paths are:
 
 | Distribution | Path, with species tag `TAG` and slice suffix `SLICE` |
 | --- | --- |
@@ -307,6 +440,8 @@ Each run writes 91 `YODA_HISTO1D_V2` blocks: thirteen per species. The paths are
 | $(1/N_{\mathrm{evt}})\,dN/(dQ^2\,dz_h)$ | `/ELECTRA_MC_2026_DNDQ2DZ/dN_dQ2dz_TAG_SLICE` |
 | $(1/N_{\mathrm{evt}})\,dN/(dx_B\,dz_h)$ | `/ELECTRA_MC_2026_DNDXBDZ/dN_dxbdz_TAG_SLICE` |
 | $(1/N_{\mathrm{evt}})\,dN/dz_h$ | `/ELECTRA_MC_2026_DNDZ/dN_dz_TAG` |
+| $(1/N_{\mathrm{evt}})\,dN/d\nu$ | `/ELECTRA_MC_2026_DNDNU/dN_dnu_TAG` |
+| $(1/N_{\mathrm{evt}})\,dN/dQ^2$ | `/ELECTRA_MC_2026_DNDQ2/dN_dQ2_TAG` |
 
 For example, the positive-pion spectrum in the first slice is
 `/ELECTRA_MC_2026_DNDPTDZ/dN_dptdz_pip_zh0p2_0p3`.
@@ -347,7 +482,7 @@ log after each run:
 - `Events seen` counts all recognized `out` blocks; for final-only eHIJING
   input this should equal the number of selected physical events, and for SMASH
   it should equal the number of selected transport replicas.
-- `Events with metadata` is the normalization denominator. `Events vetoed`
+- `Events with metadata` is the generic normalization denominator. `Events vetoed`
   counts blocks whose IDs have no metadata; these blocks are skipped.
 - `Malformed lines` counts particle rows that could not be parsed inside
   matched blocks. Resolve unexpected nonzero counts before interpreting results.
@@ -355,6 +490,11 @@ log after each run:
   restricted to the displayed axis range. `Particles seen` also includes PDG
   codes outside the seven tracked species.
 - `Particles rejected xF` remains zero while `APPLY_XF_CUT` is disabled.
+  This counter describes the generic spectra; the dedicated HERMES outputs
+  always enforce $x_F>0$.
+- `HERMES accepted DIS` counts the common DIS selection before the
+  column-specific $\nu$ thresholds. Inspect the dedicated `DIS` histograms
+  for the denominators actually used in each plotted bin.
 
 A successful exit alone is insufficient: the analyzer still writes histograms
 when no events match metadata, using a fallback denominator of one. Zero

@@ -92,6 +92,22 @@ For fragmentation plots, see the [spacetime diagram guide](docs/analysis/fragmen
 For identified-hadron spectra before and after transport, see the
 [OSCAR analysis guide](docs/analysis/oscar.md).
 
+For HERMES cross-section profile comparisons, run
+`bash analysis/run_HERMES_cross_section_profile_comparison_plot_scripts_e_d.sh` or
+`bash analysis/run_HERMES_cross_section_profile_comparison_plot_scripts_R_A.sh`.
+These read `profile_XXXXXX.yoda` files under
+`analysis/output/HERMES/cross_section_profile_comparison/e_d/` and
+`analysis/output/HERMES/cross_section_profile_comparison/R_A/{d,He,Ne,Kr,Xe}/`,
+respectively. The R_A plots match each deuterium profile to the same filename
+for each nucleus. Empty deuterium/e+d files are skipped with a warning.
+Legends show profile IDs; no formation time is inferred from an ID.
+The e+d Python scripts accept `--profile-files FILE [FILE ...]`, with
+`--tau-files` retained as an alias for older callers. To select R_A profiles
+or customize their labels, replace `profile_directory` in
+`analysis/scripts/cross_section_profile_comparison/R_A/RA_vs_zh_inputs.yaml` with an
+explicit `scenarios` list containing `label`, `deuterium`, and `nuclei`
+entries, as used by the model-comparison configuration.
+
 ## Citation
 
 If you use ELECTRA in your research, please cite:

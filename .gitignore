@@ -49,7 +49,21 @@ AGENTS.md
 
 # ========================
 # Analysis output
-/analysis/
+/analysis/*
+# Keep the updated plotting sources reviewable without tracking research data.
+!/analysis/scripts/
+/analysis/scripts/**
+!/analysis/scripts/**/
+!/analysis/scripts/hermes2007.py
+!/analysis/scripts/plot_hermes_fig2.py
+!/analysis/scripts/model_comparison/R_A/plot_RA_vs_zh.py
+!/analysis/scripts/model_comparison/R_A/RA_vs_zh_inputs.yaml
+!/analysis/scripts/cross_section_profile_comparison/R_A/plot_RA_vs_zh.py
+!/analysis/scripts/cross_section_profile_comparison/R_A/RA_vs_zh_inputs.yaml
+!/analysis/scripts/cross_section_profile_comparison/R_A/plot_HP2026_poster.py
+!/analysis/run_HERMES_plot_scripts.sh
+!/analysis/run_HERMES_model_comparison_plot_scripts_R_A.sh
+!/analysis/run_HERMES_cross_section_profile_comparison_plot_scripts_R_A.sh
 
 # ========================
 # Development directory

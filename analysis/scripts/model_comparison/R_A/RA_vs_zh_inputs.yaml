@@ -1,0 +1,44 @@
+{
+  "histogram_base": "/HERMES_2007/zh/multiplicity",
+  "histogram_pattern": "{base}_{species}",
+  "particles": ["pip", "pi0", "pim", "kp", "km", "p", "pbar"],
+  "nuclei": ["He", "Ne", "Kr", "Xe"],
+  "scenarios": [
+    {
+      "label": "eHIJING w. decays",
+      "linestyle": ":",
+      "color": "black",
+      "deuterium": "../../../output/HERMES/model_comparison/R_A/d/ehijing-decays.yoda",
+      "nuclei": {
+        "He": "../../../output/HERMES/model_comparison/R_A/He/ehijing-decays.yoda",
+        "Ne": "../../../output/HERMES/model_comparison/R_A/Ne/ehijing-decays.yoda",
+        "Kr": "../../../output/HERMES/model_comparison/R_A/Kr/ehijing-decays.yoda",
+        "Xe": "../../../output/HERMES/model_comparison/R_A/Xe/ehijing-decays.yoda"
+      }
+    },
+    {
+      "label": "eHIJING + SMASH (dec. only)",
+      "linestyle": "-.",
+      "color": "black",
+      "deuterium": "../../../output/HERMES/model_comparison/R_A/d/ehijing-smash-decays-only.yoda",
+      "nuclei": {
+        "He": "../../../output/HERMES/model_comparison/R_A/He/ehijing-smash-decays-only.yoda",
+        "Ne": "../../../output/HERMES/model_comparison/R_A/Ne/ehijing-smash-decays-only.yoda",
+        "Kr": "../../../output/HERMES/model_comparison/R_A/Kr/ehijing-smash-decays-only.yoda",
+        "Xe": "../../../output/HERMES/model_comparison/R_A/Xe/ehijing-smash-decays-only.yoda"
+      }
+    },
+    {
+      "label": "eHIJING + SMASH (dec. and coll.)",
+      "linestyle": "-",
+      "color": "black",
+      "deuterium": "../../../output/HERMES/model_comparison/R_A/d/ehijing-smash-decays-collisions.yoda",
+      "nuclei": {
+        "He": "../../../output/HERMES/model_comparison/R_A/He/ehijing-smash-decays-collisions.yoda",
+        "Ne": "../../../output/HERMES/model_comparison/R_A/Ne/ehijing-smash-decays-collisions.yoda",
+        "Kr": "../../../output/HERMES/model_comparison/R_A/Kr/ehijing-smash-decays-collisions.yoda",
+        "Xe": "../../../output/HERMES/model_comparison/R_A/Xe/ehijing-smash-decays-collisions.yoda"
+      }
+    }
+  ]
+}
