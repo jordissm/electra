@@ -91,6 +91,12 @@ HTML manual, including LaTeX equations and optional C++ API references.
 For fragmentation plots, see the [spacetime diagram guide](docs/analysis/fragmentation.md).
 For identified-hadron spectra before and after transport, see the
 [OSCAR analysis guide](docs/analysis/oscar.md).
+For configurable event/hadron cuts, species, multidimensional histograms and
+profiles, build with `cmake -S utils -B build/analysis` and
+`cmake --build build/analysis`, then pass `--analysis FILE.yaml` to the analyzer.
+Start with `analysis/configs/hermes_2007_analysis_input.yaml` or the CLAS,
+HERMES 2011/2012 and EMC configurations. See the
+[YAML analysis guide](docs/analysis/yaml-oscar.md) for the schema and SLURM usage.
 
 For HERMES cross-section profile comparisons, run
 `bash analysis/run_HERMES_cross_section_profile_comparison_plot_scripts_e_d.sh` or
@@ -110,10 +116,12 @@ entries, as used by the model-comparison configuration.
 
 For pooled charged-hadron mean production and formation times versus `z_h`,
 run the C++ `utils/analyze_oscar_output.cpp` analyzer on the data host, directly
-or through the SLURM analysis wrapper. Every run applies the HERMES selections
+or through the SLURM analysis wrapper. In legacy mode, every run applies the HERMES selections
 and writes native YODA time profiles alongside all multiplicity histograms.
-`analysis/run_cross_section_profile_comparison_times_vs_zh.sh` reads only those
-YODA files and plots them locally as PDF/PNG, independently of target species.
+`analysis/run_hadronization_comparison_times_vs_zh.sh` reads only those
+YODA files and compares HERMES, EMC, and CLAS locally as PDF/PNG, independently
+of target species. Its time profiles currently share the HERMES selections;
+experimental setup labels do not change the cuts applied during processing.
 See the [time analysis guide](docs/analysis/times-vs-zh.md) for configuration
 and input requirements.
 

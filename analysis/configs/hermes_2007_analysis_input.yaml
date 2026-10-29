@@ -1,0 +1,61 @@
+version: 1
+name: HERMES_2007
+description: Cuts from the supplied fixed-target table; no angular acceptance.
+beam: {energy: 27.6, mass: 0.00051099895, direction: -z}
+frame: TRF
+weighting: unit
+species:
+  pip: [211]
+  pim: [-211]
+  kp: [321]
+  km: [-321]
+  p: [2212]
+  pbar: [-2212]
+  charged: [211, -211, 321, -321, 2212, -2212]
+event_cuts:
+  Q2: {min: 1.0}
+  W2: {min: 4.0}
+  y: {max: 0.85}
+  xB: {min: 0.023, max: 0.8}
+  nu: {min: 6.0, max: 23.5}
+hadron_cuts:
+  zh: {min: 0.2}
+  p: {min: 2.0, max: 15.0}
+  xF: {min: 0.0}
+histograms:
+  # Fig. 2 axes; the table's explicit xB and nu bounds apply too.
+  - name: zh
+    hadron_cuts: {zh: {min: 0.1}}
+    axes:
+      - {variable: zh, edges: [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.3], density: true}
+  - name: nu
+    event_cuts: {nu: {min: 4.0, max: 23.5}}
+    axes:
+      - {variable: nu, edges: [4, 6, 8, 10, 12, 14, 16, 18, 20, 23.5]}
+  - name: Q2
+    axes:
+      - {variable: Q2, edges: [1, 1.5, 2, 3, 4, 5, 6, 8, 25]}
+  # Custom research figures: binning is illustrative, freely editable.
+  # dN/(N_DIS dz_h dpT2), in separate nu slices.
+  - name: custom_zh_pt2_nu
+    axes:
+      - {variable: zh, edges: [0.2, 0.3, 0.4, 0.6, 0.8, 1.0], density: true}
+      - {variable: pT2, edges: [0, 0.2, 0.5, 1.0, 2.0], density: true}
+      - {variable: nu, edges: [6, 10, 14, 18, 23.5]}
+  - name: pt2_vs_zh
+    kind: profile
+    quantity: pT2
+    axes:
+      - &zh_profile {variable: zh, edges: [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.3]}
+  - name: production_time
+    kind: profile
+    quantity: prod_time
+    species: [charged]
+    hadron_cuts: {zh: {min: 0.1}}
+    axes: [*zh_profile]
+  - name: formation_time
+    kind: profile
+    quantity: form_time
+    species: [charged]
+    hadron_cuts: {zh: {min: 0.1}}
+    axes: [*zh_profile]

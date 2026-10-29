@@ -5,6 +5,7 @@ import json
 import math
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 import tempfile
@@ -12,7 +13,7 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[2]
-PLOT_DIR = ROOT / "analysis/scripts/cross_section_profile_comparison/times_vs_zh"
+PLOT_DIR = ROOT / "analysis/scripts/hadronization_comparison/times_vs_zh"
 sys.path.insert(0, str(PLOT_DIR))
 from plot_times_vs_zh import BASE, load_sample, plot_samples, read_profiles
 
@@ -248,6 +249,14 @@ class OscarTimesTest(unittest.TestCase):
         other.write_text("BEGIN YODA_HISTO1D_V2 /old\nEND YODA_HISTO1D_V2\n")
         with self.assertRaisesRegex(ValueError, "missing"):
             load_sample(other)
+        # Beam settings may differ across setups, but never between the two
+        # profiles that are supposed to describe one sample.
+        prefix, profiles = self.output.read_text().split("BEGIN YODA_PROFILE1D_V2 ", 1)
+        profiles = re.sub(r"^BeamEnergyGeV: .+$", "BeamEnergyGeV: 12", profiles,
+                          count=1, flags=re.MULTILINE)
+        other.write_text(prefix + "BEGIN YODA_PROFILE1D_V2 " + profiles)
+        with self.assertRaisesRegex(ValueError, "inconsistent production/formation"):
+            load_sample(other)
 
     @unittest.skipUnless(importlib.util.find_spec("matplotlib"), "Matplotlib required for rendered output checks")
     def test_plot_wrapper_needs_only_yoda(self):
@@ -256,10 +265,18 @@ class OscarTimesTest(unittest.TestCase):
         self.oscar.unlink()
         self.meta.unlink()
         config = self.root / "plots.json"
-        config.write_text(json.dumps({"samples": [{"label": "Source", "yoda": self.output.name}]}))
+        samples = []
+        for label, energy, direction in (("Setup A", "27.6", "-z"), ("Setup B", "100", "-z"),
+                                         ("Setup C", "12", "+z")):
+            sample = self.root / (label.replace(" ", "_") + ".yoda")
+            text = re.sub(r"^BeamEnergyGeV: .+$", f"BeamEnergyGeV: {energy}", self.output.read_text(), flags=re.MULTILINE)
+            text = re.sub(r"^BeamDirection: .+$", f"BeamDirection: {direction}", text, flags=re.MULTILINE)
+            sample.write_text(text)
+            samples.append({"label": label, "yoda": sample.name})
+        config.write_text(json.dumps({"samples": samples}))
         output = self.root / "plots"
         env = dict(os.environ, PYTHON=sys.executable, MPLCONFIGDIR=str(self.root / "mpl-cache"))
-        result = subprocess.run(["bash", str(ROOT / "analysis/run_cross_section_profile_comparison_times_vs_zh.sh"),
+        result = subprocess.run(["bash", str(ROOT / "analysis/run_hadronization_comparison_times_vs_zh.sh"),
                                  "--config", str(config), "--output-dir", str(output)],
                                 cwd=self.root, env=env, capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)

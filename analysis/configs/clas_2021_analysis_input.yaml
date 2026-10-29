@@ -1,0 +1,24 @@
+version: 1
+name: CLAS_2021
+description: Supplied table cuts only; illustrative bins, no angular acceptance.
+beam: {energy: 5.014, mass: 0.00051099895, direction: -z}
+frame: TRF
+species:
+  pip: [211]
+  pim: [-211]
+event_cuts:
+  Q2: {min: 1.0, max: 4.1}
+  W2: {min: 4.0}
+  y: {max: 0.85}
+  nu: {min: 2.20, max: 4.25}
+hadron_cuts:
+  pT2: {max: 1.5}
+histograms:
+  - name: zh
+    axes:
+      - {variable: zh, min: 0, max: 1, bins: 10, density: true}
+  - name: zh_pt2_nu
+    axes:
+      - {variable: zh, min: 0, max: 1, bins: 10, density: true}
+      - {variable: pT2, edges: [0, 0.3, 0.6, 1.0, 1.5], density: true}
+      - {variable: nu, edges: [2.20, 3, 3.5, 4.25]}

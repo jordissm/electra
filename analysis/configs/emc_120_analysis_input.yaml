@@ -1,0 +1,24 @@
+version: 1
+name: EMC_120
+description: Supplied 120 GeV table cuts; illustrative bins, no angular acceptance.
+beam: {energy: 120, mass: 0.1056583755, direction: -z}
+frame: TRF
+species:
+  charged: {charge: nonzero}
+  positive: {charge: positive}
+  negative: {charge: negative}
+event_cuts:
+  Q2: {min: 2.0}
+  y: {max: 0.85}
+  xB: {min: 0.02}
+  nu: {min: 10.0}
+hadron_cuts:
+  p: {min: 3.0}
+histograms:
+  - name: zh
+    axes:
+      - {variable: zh, min: 0, max: 1, bins: 10, density: true}
+  - name: zh_nu
+    axes:
+      - {variable: zh, min: 0, max: 1, bins: 10, density: true}
+      - {variable: nu, edges: [10, 30, 50, 70, 102]}

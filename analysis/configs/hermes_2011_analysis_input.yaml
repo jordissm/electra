@@ -1,0 +1,31 @@
+version: 1
+name: HERMES_2011
+description: Supplied table cuts only; illustrative bins, no angular acceptance.
+beam: {energy: 27.6, mass: 0.00051099895, direction: -z}
+frame: TRF
+species:
+  pip: [211]
+  pim: [-211]
+  kp: [321]
+  km: [-321]
+  p: [2212]
+  pbar: [-2212]
+event_cuts:
+  Q2: {min: 1.0}
+  W2: {min: 4.0}
+  y: {max: 0.85}
+  nu: {min: 4.0, max: 23.5}
+hadron_cuts:
+  zh: {min: 0.2}
+  p: {min: 2.0, max: 15.0}
+  xF: {min: 0.0}
+histograms:
+  - name: zh
+    axes:
+      - {variable: zh, edges: [0.2, 0.3, 0.4, 0.6, 0.8, 1.0], density: true}
+  - name: pt2_vs_zh_nu
+    kind: profile
+    quantity: pT2
+    axes:
+      - {variable: zh, edges: [0.2, 0.3, 0.4, 0.6, 0.8, 1.0]}
+      - {variable: nu, edges: [4, 8, 12, 16, 23.5]}

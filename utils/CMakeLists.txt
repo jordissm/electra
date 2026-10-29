@@ -1,0 +1,13 @@
+cmake_minimum_required(VERSION 3.16)
+project(electra_oscar_analysis LANGUAGES CXX)
+
+find_package(yaml-cpp REQUIRED)
+add_executable(analyze_oscar_output analyze_oscar_output.cpp)
+target_compile_features(analyze_oscar_output PRIVATE cxx_std_17)
+target_compile_definitions(analyze_oscar_output PRIVATE ELECTRA_WITH_YAML)
+target_compile_options(analyze_oscar_output PRIVATE -Wall -Wextra -pedantic)
+if(TARGET yaml-cpp::yaml-cpp)
+  target_link_libraries(analyze_oscar_output PRIVATE yaml-cpp::yaml-cpp)
+else()
+  target_link_libraries(analyze_oscar_output PRIVATE yaml-cpp)
+endif()

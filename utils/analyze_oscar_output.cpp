@@ -1,4 +1,8 @@
 //
+// With --analysis FILE.yaml, selections, species, axes and profiles come solely
+// from YAML; build this mode using cmake -S utils -B build/analysis (yaml-cpp).
+// Without --analysis, the historical outputs described below are preserved.
+//
 // Produces both:
 //   (1/Nevt) dN/(dpT dz_h) vs pT in fixed z_h slices, and
 //   (1/Nevt) dN/dz_h vs z_h, integrated over transverse momentum, for:
@@ -27,6 +31,8 @@
 #include <iostream>
 #include <iterator>
 #include <limits>
+#include <map>
+#include <memory>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -34,6 +40,10 @@
 #include <unordered_set>
 #include <utility>
 #include <vector>
+
+#ifdef ELECTRA_WITH_YAML
+#include <yaml-cpp/yaml.h>
+#endif
 
 namespace {
 
@@ -58,6 +68,7 @@ struct MetaDIS {
   double Q2 = std::numeric_limits<double>::quiet_NaN();
   double y = std::numeric_limits<double>::quiet_NaN();
   double nu = std::numeric_limits<double>::quiet_NaN();
+  double weight = 1.0;
   FourVec P;
   FourVec q;
 };
@@ -66,6 +77,7 @@ struct Particle {
   double mass = 0.0;
   FourVec p;
   int pdg = 0;
+  int charge = 0;
 };
 
 struct Hist1D {
@@ -431,7 +443,7 @@ std::array<double, 4> getArray4(const std::string& js, const std::string& key) {
   return values;
 }
 
-std::unordered_map<int, MetaDIS> loadMeta(const std::string& path, bool strict = false) {
+std::unordered_map<int, MetaDIS> loadMeta(const std::string& path, bool strict = false, bool readWeights = false) {
   std::unordered_map<int, MetaDIS> meta;
   for (const std::string& js : readJsonObjects(path)) {
     MetaDIS m;
@@ -446,6 +458,7 @@ std::unordered_map<int, MetaDIS> loadMeta(const std::string& path, bool strict =
     m.Q2 = getNumber(js, "Q2");
     m.y = getNumber(js, "y");
     m.nu = getNumber(js, "nu");
+    if (readWeights && js.find("\"weight\"") != std::string::npos) m.weight = getNumber(js, "weight");
     const auto P4 = getArray4(js, "P4");
     const auto q4 = getArray4(js, "q4");
     m.P = {P4[3], P4[0], P4[1], P4[2]};
@@ -557,6 +570,7 @@ const char* frameName(FrameChoice frame) {
 }
 
 struct Config {
+  std::string analysisPath;
   std::string metaPath;
   std::string outPath = "dndptdz_dndz.yoda";
   double ptMin = 0.0;
@@ -580,6 +594,7 @@ void printUsage(const char* argv0) {
   std::cerr
       << "Usage: " << argv0 << " --meta DISKinematics.meta.jsonl [options] file1.oscar [file2.oscar ...]\n"
       << "\nOptions:\n"
+      << "  --analysis PATH    YAML-defined analysis (requires the YAML-enabled build)\n"
       << "  --file-list PATH    Read OSCAR input paths from PATH; use '-' for stdin\n"
       << "  --out PATH          Output YODA-like histogram file (default: dndptdz_dndz.yoda)\n"
       << "  --pt-min VALUE      pT histogram minimum in GeV (default: 0.0)\n"
@@ -605,8 +620,11 @@ void printUsage(const char* argv0) {
 
 Config parseArgs(int argc, char** argv) {
   Config cfg;
+  bool legacyOptions = false;
   for (int i = 1; i < argc; ++i) {
     const std::string arg = argv[i];
+    if (arg.rfind("--pt-", 0) == 0 || arg.rfind("--zh-", 0) == 0 ||
+        arg.rfind("--xf-", 0) == 0 || arg.rfind("--hermes-", 0) == 0 || arg == "--frame") legacyOptions = true;
     auto requireValue = [&](const std::string& opt) -> std::string {
       if (i + 1 >= argc) throw std::runtime_error("Missing value for " + opt);
       return argv[++i];
@@ -617,6 +635,8 @@ Config parseArgs(int argc, char** argv) {
       std::exit(0);
     } else if (arg == "--meta") {
       cfg.metaPath = requireValue(arg);
+    } else if (arg == "--analysis") {
+      cfg.analysisPath = requireValue(arg);
     } else if (arg == "--file-list") {
       cfg.fileListPaths.push_back(requireValue(arg));
     } else if (arg == "--out") {
@@ -664,6 +684,9 @@ Config parseArgs(int argc, char** argv) {
   }
 
   if (cfg.metaPath.empty()) throw std::runtime_error("Missing required --meta path");
+  if (!cfg.analysisPath.empty() && legacyOptions) {
+    throw std::runtime_error("--analysis defines all selections and axes; omit legacy physics/axis options");
+  }
   for (const std::string& listPath : cfg.fileListPaths) {
       std::vector<std::string> listed = readPathList(listPath);
       cfg.oscarPaths.insert(cfg.oscarPaths.end(), listed.begin(), listed.end());
@@ -770,7 +793,7 @@ bool parseParticleLine(const std::string& line, Particle& particle) {
         const int id = nextInt();
         const int charge = nextInt();
         (void)id;
-        (void)charge;
+        particle.charge = charge;
     } catch (...) {
         return false;
     }
@@ -989,10 +1012,15 @@ void writeTimeProfiles(std::ostream& out, const Config& cfg, const TimeState& st
   if (!out) throw std::runtime_error("Failed writing time-profile file: " + cfg.outPath);
 }
 
+#include "oscar_analysis.hpp"
+
 void validateInputPaths(const Config& cfg) {
   std::unordered_set<std::string> inputs;
   const auto output = std::filesystem::weakly_canonical(cfg.outPath);
   if (output == std::filesystem::canonical(cfg.metaPath)) throw std::runtime_error("Output must not overwrite DIS metadata");
+  if (!cfg.analysisPath.empty() && output == std::filesystem::canonical(cfg.analysisPath)) {
+    throw std::runtime_error("Output must not overwrite analysis YAML");
+  }
   for (const auto& path : cfg.fileListPaths) {
     if (path != "-" && output == std::filesystem::canonical(path)) throw std::runtime_error("Output must not overwrite an input manifest");
   }
@@ -1186,7 +1214,7 @@ void analyzeParticle(const Particle& particle, const MetaDIS& meta, const Config
 }
 
 void analyzeOscarFile(const std::string& path, const std::unordered_map<int, MetaDIS>& meta, const Config& cfg,
-                      AnalysisState& state, TimeState& times) {
+                      AnalysisState& state, TimeState& times, GenericAnalysis* generic = nullptr) {
   std::ifstream in(path);
   if (!in) throw std::runtime_error("Cannot open OSCAR file: " + path);
 
@@ -1265,17 +1293,18 @@ void analyzeOscarFile(const std::string& path, const std::unordered_map<int, Met
       currentEvent = hasFilenameEvent ? filenameEvent : eventNumber;
       const auto it = meta.find(currentEvent);
       if (it == meta.end()) {
-        if (hasTimeColumns) throw std::runtime_error("Missing DIS metadata for event " + std::to_string(currentEvent));
+        if (hasTimeColumns || generic) throw std::runtime_error("Missing DIS metadata for event " + std::to_string(currentEvent));
         ++state.eventsVetoed;
         currentMeta = nullptr;
       } else {
         ++state.eventsWithMeta;
         currentMeta = &it->second;
         if (times.targetA < 0) { times.targetZ = currentMeta->Z; times.targetA = currentMeta->A; }
-        if (hasTimeColumns && (times.targetZ != currentMeta->Z || times.targetA != currentMeta->A)) {
-          throw std::runtime_error("Multiple targets in one time sample");
+        if ((hasTimeColumns || generic) && (times.targetZ != currentMeta->Z || times.targetA != currentMeta->A)) {
+          throw std::runtime_error("Multiple targets in one analysis sample");
         }
-        hermesEvent.accepted = passesHermesDIS(*currentMeta, cfg);
+        if (generic) generic->beginEvent(*currentMeta, hasTimeColumns);
+        else hermesEvent.accepted = passesHermesDIS(*currentMeta, cfg);
       }
       inEvent = true;
       continue;
@@ -1286,7 +1315,10 @@ void analyzeOscarFile(const std::string& path, const std::unordered_map<int, Met
       if (!inEvent || remaining != 0 || headerEvent != block[0] || headerEnsemble != block[1]) {
         throw std::runtime_error("Mismatched event end or particle count in " + path);
       }
-      if (inEvent && currentMeta) finishHermesEvent(hermesEvent, *currentMeta, state.hermes);
+      if (inEvent && currentMeta) {
+        if (generic) generic->endEvent();
+        else finishHermesEvent(hermesEvent, *currentMeta, state.hermes);
+      }
       inEvent = false;
       currentEvent = -1;
       currentMeta = nullptr;
@@ -1301,8 +1333,12 @@ void analyzeOscarFile(const std::string& path, const std::unordered_map<int, Met
 
     Particle particle;
     if (!parseParticleLine(line, particle)) {
-      if (hasTimeColumns) throw std::runtime_error("Invalid OSCAR particle values in " + path);
+      if (hasTimeColumns || generic) throw std::runtime_error("Invalid OSCAR particle values in " + path);
       ++state.malformedParticleLines;
+      continue;
+    }
+    if (generic) {
+      generic->particle(particle, line, columns, hasTimeColumns);
       continue;
     }
     analyzeParticle(particle, *currentMeta, cfg, state);
@@ -1467,8 +1503,10 @@ int main(int argc, char** argv) {
   try {
     const Config cfg = parseArgs(argc, argv);
     validateInputPaths(cfg);
-    auto meta = loadMeta(cfg.metaPath, true);
+    auto meta = loadMeta(cfg.metaPath, true, !cfg.analysisPath.empty());
     TimeState times(cfg);
+    std::unique_ptr<GenericAnalysis> generic;
+    if (!cfg.analysisPath.empty()) generic = std::make_unique<GenericAnalysis>(cfg.analysisPath);
 
     AnalysisState state;
     for (std::size_t is = 0; is < NSPEC; ++is) {
@@ -1487,7 +1525,7 @@ int main(int argc, char** argv) {
     const std::size_t total = cfg.oscarPaths.size();
 
     for (std::size_t i = 0; i < total; ++i) {
-        analyzeOscarFile(cfg.oscarPaths[i], meta, cfg, state, times);
+        analyzeOscarFile(cfg.oscarPaths[i], meta, cfg, state, times, generic.get());
 
         if (i % 100 == 0 || i + 1 == total) {
             std::cerr
@@ -1499,6 +1537,14 @@ int main(int argc, char** argv) {
         }
     }
 
+    if (generic) {
+      std::ofstream out(cfg.outPath);
+      if (!out) throw std::runtime_error("Cannot write output file: " + cfg.outPath);
+      generic->write(out);
+      if (!out) throw std::runtime_error("Failed writing output: " + cfg.outPath);
+      std::cerr << "Events analyzed: " << state.eventsWithMeta << "\nWrote: " << cfg.outPath << "\n";
+      return 0;
+    }
     finalize(state);
     writeOutput(cfg.outPath, state, cfg, times);
 

@@ -16,10 +16,10 @@ Options can also be supplied as environment variables:
   INDEX_TIME_LIMIT, ANALYSIS_TIME_LIMIT, CPUS_PER_TASK, MEMORY, ANALYZER,
   OSCAR_PATTERN, PT_MIN, PT_MAX, PT_NBINS, ZH_MIN, ZH_MAX, ZH_NBINS,
   FRAME, HERMES_ACCEPTANCE, HERMES_BEAM_ENERGY, HERMES_BEAM_DIRECTION,
-  OUT, SKIP_INDEXING, SUBRUN_LABEL
+  ANALYSIS_INPUT, OUT, SKIP_INDEXING, SUBRUN_LABEL
 
-Every analysis writes multiplicity spectra and charged-hadron time profiles
-together in the output YODA file.
+Set ANALYSIS_INPUT=/absolute/path/to/analysis.yaml to select YAML histograms.
+Without it, the legacy spectra and charged-hadron time profiles are written.
 
 Set SKIP_INDEXING=1 to reuse an existing FILE_LIST and submit only the analysis job.
 The default z_h axis uses HERMES Fig. 2 edges. Setting any ZH_* axis option
@@ -112,6 +112,14 @@ FRAME="${FRAME:-LAB}"
 HERMES_ACCEPTANCE="${HERMES_ACCEPTANCE:-none}"
 HERMES_BEAM_ENERGY="${HERMES_BEAM_ENERGY:-27.6}"
 HERMES_BEAM_DIRECTION="${HERMES_BEAM_DIRECTION:--z}"
+ANALYSIS_INPUT="${ANALYSIS_INPUT:-}"
+if [[ -n "$ANALYSIS_INPUT" ]]; then
+    if [[ ! -f "$ANALYSIS_INPUT" ]]; then
+        echo "Error: analysis YAML not found: $ANALYSIS_INPUT" >&2
+        exit 1
+    fi
+    ANALYSIS_INPUT="$(cd "$(dirname "$ANALYSIS_INPUT")" && pwd)/$(basename "$ANALYSIS_INPUT")"
+fi
 
 if [[ -n "${RUN_DIR:-}" ]]; then
     :
@@ -249,20 +257,23 @@ FRAME="${FRAME}"
 HERMES_ACCEPTANCE="${HERMES_ACCEPTANCE}"
 HERMES_BEAM_ENERGY="${HERMES_BEAM_ENERGY}"
 HERMES_BEAM_DIRECTION="${HERMES_BEAM_DIRECTION}"
+ANALYSIS_INPUT="${ANALYSIS_INPUT}"
 
-AXIS_ARGS=(--frame "\${FRAME}" --hermes-acceptance "\${HERMES_ACCEPTANCE}"
-           --hermes-beam-energy "\${HERMES_BEAM_ENERGY}" --hermes-beam-direction "\${HERMES_BEAM_DIRECTION}")
-if [[ -n "\${ZH_MIN}" || -n "\${ZH_MAX}" || -n "\${ZH_NBINS}" ]]; then
-    AXIS_ARGS+=(--zh-min "\${ZH_MIN:-0.05}" --zh-max "\${ZH_MAX:-0.95}" --zh-nbins "\${ZH_NBINS:-9}")
+if [[ -n "\${ANALYSIS_INPUT}" ]]; then
+    AXIS_ARGS=(--analysis "\${ANALYSIS_INPUT}")
+else
+    AXIS_ARGS=(--frame "\${FRAME}" --hermes-acceptance "\${HERMES_ACCEPTANCE}"
+               --hermes-beam-energy "\${HERMES_BEAM_ENERGY}" --hermes-beam-direction "\${HERMES_BEAM_DIRECTION}"
+               --pt-min "\${PT_MIN}" --pt-max "\${PT_MAX}" --pt-nbins "\${PT_NBINS}")
+    if [[ -n "\${ZH_MIN}" || -n "\${ZH_MAX}" || -n "\${ZH_NBINS}" ]]; then
+        AXIS_ARGS+=(--zh-min "\${ZH_MIN:-0.05}" --zh-max "\${ZH_MAX:-0.95}" --zh-nbins "\${ZH_NBINS:-9}")
+    fi
 fi
 
 "\${ANALYZER}" \
     --meta "\${META_FILE}" \
     --file-list "\${FILE_LIST}" \
     --out "\${OUT}" \
-    --pt-min "\${PT_MIN}" \
-    --pt-max "\${PT_MAX}" \
-    --pt-nbins "\${PT_NBINS}" \
     "\${AXIS_ARGS[@]}"
 EOF
 )

@@ -20,6 +20,7 @@ configuration
 outputs
 analysis/fragmentation
 analysis/oscar
+analysis/yaml-oscar
 analysis/times-vs-zh
 analysis/rivet
 ```

@@ -7,6 +7,12 @@ distributions and charged-hadron time profiles to one YODA text file on every
 run. It does not require Rivet, ROOT, or the
 simulation libraries.
 
+For configurable cuts, species, multidimensional bins, and mean-value profiles,
+use the [YAML analysis mode](yaml-oscar.md). Build that mode with yaml-cpp and
+pass `--analysis analysis/configs/hermes_2007_analysis_input.yaml`, or your own
+configuration. The remainder of this page describes the legacy mode without
+`--analysis` and its input conventions shared by both modes.
+
 Use separate analyzer invocations for eHIJING and for each SMASH profile. This
 keeps the distributions before transport and after transport available for
 comparison. See [output layout](../outputs.md) for the run directory structure
