@@ -3,7 +3,7 @@
 Event processing lives in `utils/analyze_oscar_output.cpp`. Every run reads
 OSCAR and DIS metadata once and writes all multiplicity histograms and native
 YODA time profiles together in the same file. The scripts under
-`analysis/scripts/cross_section_profile_comparison/times_vs_zh/` only read those
+`analysis/scripts/hadronization_comparison/times_vs_zh/` only read those
 YODA files and plot. No OSCAR files, DIS metadata, CSVs, or JSON sidecars are
 needed on the plotting machine.
 
@@ -11,6 +11,12 @@ Any target can be analyzed without a deuterium reference or nuclear ratio.
 All accepted $\pi^\pm$, $K^\pm$, $p$ and $\bar p$ enter **one pooled
 charged-hadron average**, with equal weight per hadron. Analyze distinct
 samples/targets separately and overlay their YODA files as desired.
+
+This analysis belongs to `hadronization_comparison`. The supplied plot config
+compares the HERMES, EMC, and CLAS experimental setups, using one independently
+analyzed YODA input per setup. The event-processing utility and histogram paths
+are shared with the other analyses; changing the plotting directory requires no
+regeneration of YODA files that already contain the time profiles.
 
 ## Definition and selection
 
@@ -26,7 +32,13 @@ times are retained. They are neither proper times nor elapsed times from the
 hard interaction. Compare samples in the same frame with compatible spacetime
 origins; see the [unit conventions](../_generated/units.md).
 
-The cuts reuse the existing C++ analyzer's HERMES selection:
+The C++ analyzer currently applies the common HERMES selection below to time
+profiles from every setup. The labels HERMES, EMC, and CLAS identify input
+samples; they do not select experiment-specific cuts or alter recorded times.
+Changing these selections requires a separate explicit physics choice. The
+`/HERMES_2007/zh/` histogram paths identify this shared selection, not the
+experiment that generated the sample:
+
 
 - $Q^2>1$ GeV², $W^2=(P+q)^2>4$ GeV², $0<y<0.85$, and $\nu>6$ GeV.
 - $z_h=(P\cdot p_h)/(P\cdot q)>0.1$, from metadata `P4` and `q4`.
@@ -117,36 +129,66 @@ compatible samples and raw moments, never precomputed means.
 
 Annotations record selection, particle species, production availability,
 coordinate-time units, angular/beam settings, target, and input/exclusion
-counts. Plots require matching annotations and binning across curves. Empty
-bins have zero raw moments and plot as gaps rather than zero means. Plots show
+counts. Production and formation annotations must match within each input.
+Across experimental setups, plots require matching time definitions, species,
+availability policy, selection, angular-acceptance mode, and binning; recorded
+beam energy and direction may differ. Empty bins have zero raw moments and plot
+as gaps rather than zero means. Plots show
 means at bin centers without error bars; hadron spread and event/replica
 correlations are not interpreted as uncertainties on the means.
 
-Copy the resulting YODA files to the plotting machine. With Python 3.10+ and
-Matplotlib, plot them directly:
+The input layout separates experimental setups:
 
-```bash
-python3 analysis/scripts/cross_section_profile_comparison/times_vs_zh/plot_times_vs_zh.py \
-  --inputs /path/to/ehijing.yoda /path/to/another_sample.yoda \
-  --labels "eHIJING" "Another sample" \
-  --output-dir analysis/output/cross_section_profile_comparison/times_vs_zh/plots
+```text
+analysis/output/
+  HERMES/hadronization_comparison/times_vs_zh/ehijing-decays.yoda
+  EMC/hadronization_comparison/times_vs_zh/ehijing-decays.yoda
+  CLAS/hadronization_comparison/times_vs_zh/ehijing-decays.yoda
 ```
 
-Alternatively, copy
-`analysis/scripts/cross_section_profile_comparison/times_vs_zh/times_vs_zh_inputs.example.json`
-to a working plot config and list each sample's `yoda` path and `label`. Paths
-resolve relative to the config. Run the plotting-only wrapper:
+Copy each setup's combined analyzer output to its corresponding path. Keep the
+hadronization/decay treatment consistent across setups. The existing HERMES
+files have been moved from the former time-analysis directory with their
+original filenames; existing SMASH files are not relabeled or used as EMC/CLAS
+inputs. Supply actual EMC and CLAS outputs before using the three-setup config.
+
+With Python 3.10+ and Matplotlib, run the supplied configuration from the
+repository root:
 
 ```bash
-bash analysis/run_cross_section_profile_comparison_times_vs_zh.sh \
-  --config /path/to/times_vs_zh_inputs.json \
-  --output-dir analysis/output/cross_section_profile_comparison/times_vs_zh/plots
+bash analysis/run_hadronization_comparison_times_vs_zh.sh \
+  --config analysis/scripts/hadronization_comparison/times_vs_zh/times_vs_zh_inputs.example.json \
+  --output-dir analysis/output/hadronization_comparison/times_vs_zh/plots
 ```
 
-Both entry points write `charged_hadron_times_vs_zh.pdf` and `.png`, with one
-production-time panel and one formation-time panel. Set `PYTHON` to choose the
-wrapper's plotting interpreter. The existing multiplicity YODA files lack time
-moments and must be regenerated with the updated analyzer for these plots.
+Or pass files and labels directly:
+
+```bash
+python3 analysis/scripts/hadronization_comparison/times_vs_zh/plot_times_vs_zh.py \
+  --inputs analysis/output/HERMES/hadronization_comparison/times_vs_zh/ehijing-decays.yoda \
+           analysis/output/EMC/hadronization_comparison/times_vs_zh/ehijing-decays.yoda \
+           analysis/output/CLAS/hadronization_comparison/times_vs_zh/ehijing-decays.yoda \
+  --labels HERMES EMC CLAS \
+  --output-dir analysis/output/hadronization_comparison/times_vs_zh/plots
+```
+
+To use other locations, copy the example JSON to a working config and edit
+`yoda` paths and `label` values. Relative input paths resolve beside that config.
+Set `PYTHON` to choose the shell wrapper's plotting interpreter.
+
+Both entry points write `charged_hadron_times_vs_zh.pdf` and `.png` with both
+times in one panel. Colors identify experimental setups: HERMES, EMC, and CLAS.
+The figure is 3.4 inches square with a square plotting panel, sized for one
+column in a two-column manuscript. Explicit text sizes (7.5 pt ticks and legend,
+13 pt axis labels, and a 9.5 pt charged-hadron annotation) approximately match
+the comparison plots after manuscript scaling. Include the PDF at
+`width=\columnwidth` to retain these sizes; resizing it scales all text and
+line widths together.
+Production times are always dashed and formation times always solid. Separate
+legend entries explain the setup colors and time styles. The y-axis reads
+$\langle t\rangle\,\text{fm}$ with $c=1$; stored coordinate-time values are
+unchanged. Older YODA files without time profiles must be regenerated with the
+updated analyzer for these plots.
 
 ## Input limitations and validation
 

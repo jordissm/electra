@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read configured YODA time profiles and plot their charged-hadron averages."""
+"""Plot configured experimental setups from their YODA charged-hadron time profiles."""
 
 import argparse
 import json
