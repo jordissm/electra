@@ -2,7 +2,7 @@
 
 Commands below are examples for a new run named `demo`. They generate events
 only when you execute them. Choose the physical settings and sample size for
-your study; the example uses the supplied HERMES settings and CLI defaults.
+your study; the example uses the supplied HERMES 2007 settings and CLI defaults.
 
 ## Generate eHIJING events
 
@@ -14,14 +14,17 @@ After [installation](../getting-started.md), run from the repository root:
   --number-of-events 10 \
   --chunk-size 10 \
   --seed 12345 \
-  --hard-process-config /workspace/input/ehijing/experiments/hermes/hard_process.setting \
-  --hadronization-config /workspace/input/ehijing/experiments/hermes/hadronization.setting \
-  --dis-cuts-config /workspace/input/ehijing/experiments/hermes/dis_cuts.setting
+  --hard-process-config /workspace/input/ehijing/experiments/hermes_2007/hard_process.setting \
+  --hadronization-config /workspace/input/ehijing/experiments/hermes_2007/hadronization.setting \
+  --dis-cuts-config /workspace/input/ehijing/experiments/hermes_2007/dis_cuts.setting
 ```
 
 The shell binds the host input/output directories to `/workspace/input` and
 `/workspace/output`. The run path above ends in `ehijing` so that SMASH can
 find its events under the parent run directory. See [output layout](../outputs.md).
+
+For CLAS, another HERMES year, or an EMC beam energy, replace `hermes_2007`
+in all three paths with a [supplied bundle name](../configuration.md#experiment-settings).
 
 The ELECTRA CLI defaults to Generalized Higher Twist (GHT), mode `1`.
 Add `--medium-modification-mode 0` to select Higher Twist (HT).

@@ -8,13 +8,17 @@ and host output directory before submitting jobs.
 
 ```bash
 bash slurm-scripts/ehijing_submit.sh \
-  EXPERIMENT=hermes NEVENTS=1000 CHUNK_SIZE=100 SEED=12345
+  EXPERIMENT=hermes_2007 NEVENTS=1000 CHUNK_SIZE=100 SEED=12345
 ```
 
 `EXPERIMENT` is required and selects a directory under
 `input/ehijing/experiments/`. `CONFIG_PATH`, `HADRONIZATION_CONFIG_PATH` and
-`DIS_CUTS_CONFIG_PATH` can override its individual files. The supplied bundle
-is `hermes`.
+`DIS_CUTS_CONFIG_PATH` can override its individual files. The supplied bundles
+are `clas`, `hermes_2007`, `hermes_2011`, `hermes_2012`, `emc_Ebeam-100`,
+`emc_Ebeam-120`, `emc_Ebeam-200` and `emc_Ebeam-280`. See
+[experiment settings and DIS cuts](../configuration.md) for their beam energies
+and selections. The former `EXPERIMENT=hermes` must be replaced with a
+year-specific bundle name.
 
 The script reserves a numeric run ID, prints the run directory and submits
 an array. A postprocessing job runs after the array succeeds and combines

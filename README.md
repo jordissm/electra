@@ -38,10 +38,15 @@ curl -fsSL https://raw.githubusercontent.com/jordissm/electra/main/install.sh -o
 1. Execute `ehijing` using the SLURM script provided:
 
 ```terminal
-bash slurm-scripts/ehijing_submit.sh EXPERIMENT=hermes NEVENTS=<NEVENTS> CHUNK_SIZE=<CHUNK_SIZE> SEED=12345
+bash slurm-scripts/ehijing_submit.sh EXPERIMENT=hermes_2007 NEVENTS=<NEVENTS> CHUNK_SIZE=<CHUNK_SIZE> SEED=12345
 ```
 
 where `<NEVENTS>` should be an integer between `1` and `1_000_000` and `<CHUNK_SIZE>` should be an integer between `1` and `<NEVENTS>`.
+
+Choose `EXPERIMENT` from `clas`, `hermes_2007`, `hermes_2011`, `hermes_2012`,
+`emc_Ebeam-100`, `emc_Ebeam-120`, `emc_Ebeam-200` or `emc_Ebeam-280`.
+See [experiment settings](docs/configuration.md#experiment-settings) for beam
+energies and DIS cuts. The former `hermes` bundle is now split by year.
 
 1. Prepare the profile index and a compatible SMASH configuration using the
    [local workflow](docs/running/local.md), then select the generated run directory.

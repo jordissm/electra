@@ -14,16 +14,59 @@ Keep these three settings files together under
 The Python CLI requires all three paths explicitly. The SLURM script resolves
 them from `EXPERIMENT`. Relative paths are resolved from the working directory.
 
+The supplied bundles are:
+
+| Directory / SLURM `EXPERIMENT` | Incoming lepton (`Beams:idB`) | Beam energy (`Beams:eB`, GeV) |
+| --- | --- | --- |
+| `clas` | Electron (`11`) | 5.014 |
+| `hermes_2007` | Electron (`11`) | 27.6 |
+| `hermes_2011` | Electron (`11`) | 27.6 |
+| `hermes_2012` | Electron (`11`) | 27.6 |
+| `emc_Ebeam-100` | Muon (`13`) | 100 |
+| `emc_Ebeam-120` | Muon (`13`) | 120 |
+| `emc_Ebeam-200` | Muon (`13`) | 200 |
+| `emc_Ebeam-280` | Muon (`13`) | 280 |
+
+Use the exact directory name, including the capital `E` in EMC names. The
+former `hermes` directory has been replaced by the three year-specific bundles;
+select the year for the intended analysis and use all three files from that
+bundle. Choosing a bundle sets the beam and generation cuts; target species
+and downstream analysis selections are configured separately.
+
+All bundles currently share the same hadronization settings and hard-process
+settings apart from the incoming lepton species and energy. They enable
+neutral-current photon/Z exchange, disable charged-current exchange, and use
+`PhaseSpace:Q2Min = 1.0`. The runtime DIS cuts below are applied separately.
+
 ## DIS cuts
 
 The cut loader accepts the optional keys `yMin`, `yMax`, `xBMin`, `xBMax`,
 `nuMin`, `nuMax`, `Q2Min`, `Q2Max`, `W2Min` and `W2Max`.
 `y` and `xB` are dimensionless, `nu` is in GeV, and `Q2`/`W2` are in GeV².
-The supplied HERMES file is:
+The configured selections are listed below. Bounds are strict; a dash means
+that the corresponding bound is absent from `dis_cuts.setting` and is not
+applied by the DIS cut loader. `yMax = 0.85` is set in every bundle.
 
-```{literalinclude} ../input/ehijing/experiments/hermes/dis_cuts.setting
+| Bundle | `Q2Min` | `Q2Max` | `W2Min` | `yMin` | `xBMin` | `xBMax` | `nuMin` | `nuMax` |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `clas` | 1.0 | 4.1 | 4.0 | — | — | — | 2.20 | 4.25 |
+| `hermes_2007` | 1.0 | — | 4.0 | — | — | — | 4.0 | 23.5 |
+| `hermes_2011` | 1.0 | — | 4.0 | — | 0.023 | 0.8 | 6.0 | 23.5 |
+| `hermes_2012` | 1.0 | — | 10.0 | 0.10 | 0.023 | 0.6 | — | — |
+| `emc_Ebeam-100` | 2.0 | — | — | — | 0.02 | — | 10.0 | — |
+| `emc_Ebeam-120` | 2.0 | — | — | — | 0.02 | — | 10.0 | — |
+| `emc_Ebeam-200` | 2.0 | — | — | — | 0.02 | — | 30.0 | — |
+| `emc_Ebeam-280` | 5.0 | — | — | — | 0.02 | — | 50.0 | — |
+
+No supplied bundle sets `W2Max`. For example, the HERMES 2007 file is:
+
+```{literalinclude} ../input/ehijing/experiments/hermes_2007/dis_cuts.setting
 :language: text
 ```
+
+These generation cuts do not configure detector acceptance or hadron cuts in
+the analyzer. Select the appropriate [YAML analysis configuration](analysis/yaml-oscar.md)
+separately.
 
 ## Runtime controls
 
@@ -32,7 +75,7 @@ argument parser. The wrapper forwards event counts, IDs, seeds, medium mode,
 `K`, target species, tabulation directory and the three settings paths to eHIJING.
 
 ELECTRA defaults to **Generalized Higher Twist (GHT)**, medium modification
-mode `1`, in the Python CLI, the HERMES hard-process settings, and the SLURM
+mode `1`, in the Python CLI, all supplied hard-process settings, and the SLURM
 generation script. Use `--medium-modification-mode 0` locally or
 `MED_MODIF_MODE=0` on SLURM to select Higher Twist (HT). The executable's
 command-line mode overrides `eHIJING:MediumModificationSplittingFunctionMode`
