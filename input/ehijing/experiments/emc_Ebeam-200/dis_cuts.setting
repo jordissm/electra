@@ -1,0 +1,8 @@
+# Runtime DIS event-selection cuts.
+# All keys are optional. Values use Pythia/eHIJING kinematic units:
+# nu is in GeV; Q2 and W2 are in GeV^2.
+
+Q2Min = 2.0
+yMax = 0.85
+xBMin = 0.02
+nuMin = 30.0

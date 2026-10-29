@@ -2,13 +2,10 @@
 # All keys are optional. Values use Pythia/eHIJING kinematic units:
 # nu is in GeV; Q2 and W2 are in GeV^2.
 
-yMin = 0.10
+Q2Min = 1.0
+W2Min = 4.0
 yMax = 0.85
 xBMin = 0.023
-xBMax = 0.6
-# nuMin =
-# nuMax =
-Q2Min = 1.0
-# Q2Max =
-W2Min = 10.0
-# W2Max =
+xBMax = 0.8
+nuMin = 6.0
+nuMax = 23.5
