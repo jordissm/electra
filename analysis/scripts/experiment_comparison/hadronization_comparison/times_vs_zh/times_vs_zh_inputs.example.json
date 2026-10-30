@@ -1,17 +1,17 @@
 {
-  "title": "Charged-hadron times: HERMES, EMC and CLAS",
+  "title": "Charged-hadron times: CLAS, HERMES and EMC",
   "samples": [
     {
+      "label": "CLAS",
+      "yoda": "../../../../output/CLAS/hadronization_comparison/times_vs_zh/multiplicities.yoda"
+    },
+    {
       "label": "HERMES",
-      "yoda": "../../../../output/HERMES/hadronization_comparison/times_vs_zh/ehijing-decays.yoda"
+      "yoda": "../../../../output/HERMES/hadronization_comparison/times_vs_zh/multiplicities.yoda"
     },
     {
       "label": "EMC",
-      "yoda": "../../../../output/EMC/hadronization_comparison/times_vs_zh/ehijing-decays.yoda"
-    },
-    {
-      "label": "CLAS",
-      "yoda": "../../../../output/CLAS/hadronization_comparison/times_vs_zh/ehijing-decays.yoda"
+      "yoda": "../../../../output/EMC/hadronization_comparison/times_vs_zh/multiplicities.yoda"
     }
   ]
 }

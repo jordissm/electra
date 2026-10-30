@@ -47,8 +47,11 @@ The runner invokes all four HERMES model/profile workflows (including the
 poster and Fig. 2 plots), all three CLAS pion figures, the EMC comparison, and the configured time
 comparison. It continues after errors and exits with status 1 if any workflow
 fails, listing the failed workflows at the end. Existing launchers retain
-their output directories. The time comparison writes to
-`analysis/output/plots/experiment_comparison/times_vs_zh/`.
+their output directories. The time comparison writes one panel containing
+production and formation curves for CLAS, HERMES, and EMC to
+`analysis/output/plots/experiment_comparison/times_vs_zh/`. Run it on its own
+with `bash analysis/run_hadronization_comparison_times_vs_zh.sh`; it uses the
+same input and output defaults as the all-plots runner.
 
 The CLAS workflow uses its supplied `RA_vs_zh_inputs.yaml` by default and
 requires the configured simulation files. Use `--clas-data-only` to plot the

@@ -141,9 +141,9 @@ The input layout separates experimental setups:
 
 ```text
 analysis/output/
-  HERMES/hadronization_comparison/times_vs_zh/ehijing-decays.yoda
-  EMC/hadronization_comparison/times_vs_zh/ehijing-decays.yoda
-  CLAS/hadronization_comparison/times_vs_zh/ehijing-decays.yoda
+  CLAS/hadronization_comparison/times_vs_zh/multiplicities.yoda
+  HERMES/hadronization_comparison/times_vs_zh/multiplicities.yoda
+  EMC/hadronization_comparison/times_vs_zh/multiplicities.yoda
 ```
 
 Copy each setup's combined analyzer output to its corresponding path. Keep the
@@ -152,24 +152,28 @@ files have been moved from the former time-analysis directory with their
 original filenames; existing SMASH files are not relabeled or used as EMC/CLAS
 inputs. Supply actual EMC and CLAS outputs before using the three-setup config.
 
-With Python 3.10+ and Matplotlib, run the supplied configuration from the
-repository root:
+With Python 3.10+ and Matplotlib, run from the repository root to overlay
+CLAS, HERMES, and EMC in one panel:
 
 ```bash
-bash analysis/run_hadronization_comparison_times_vs_zh.sh \
-  --config analysis/scripts/experiment_comparison/hadronization_comparison/times_vs_zh/times_vs_zh_inputs.example.json \
-  --output-dir analysis/output/hadronization_comparison/times_vs_zh/plots
+bash analysis/run_hadronization_comparison_times_vs_zh.sh
 ```
+
+The launcher uses `times_vs_zh_inputs.json` beside the runner if present,
+otherwise the supplied three-experiment example. It writes one combined figure
+as PDF and PNG under `analysis/output/plots/experiment_comparison/times_vs_zh/`,
+matching the all-plots runner. Use `--config FILE` or `--output-dir DIR` to
+override these defaults.
 
 Or pass files and labels directly:
 
 ```bash
 python3 analysis/scripts/experiment_comparison/hadronization_comparison/times_vs_zh/plot_times_vs_zh.py \
-  --inputs analysis/output/HERMES/hadronization_comparison/times_vs_zh/ehijing-decays.yoda \
-           analysis/output/EMC/hadronization_comparison/times_vs_zh/ehijing-decays.yoda \
-           analysis/output/CLAS/hadronization_comparison/times_vs_zh/ehijing-decays.yoda \
-  --labels HERMES EMC CLAS \
-  --output-dir analysis/output/hadronization_comparison/times_vs_zh/plots
+  --inputs analysis/output/CLAS/hadronization_comparison/times_vs_zh/multiplicities.yoda \
+           analysis/output/HERMES/hadronization_comparison/times_vs_zh/multiplicities.yoda \
+           analysis/output/EMC/hadronization_comparison/times_vs_zh/multiplicities.yoda \
+  --labels CLAS HERMES EMC \
+  --output-dir analysis/output/plots/experiment_comparison/times_vs_zh
 ```
 
 To use other locations, copy the example JSON to a working config and edit
@@ -177,7 +181,8 @@ To use other locations, copy the example JSON to a working config and edit
 Set `PYTHON` to choose the shell wrapper's plotting interpreter.
 
 Both entry points write `charged_hadron_times_vs_zh.pdf` and `.png` with both
-times in one panel. Colors identify experimental setups: HERMES, EMC, and CLAS.
+times for all three experiments in one panel (six curves total). Colors
+identify experimental setups: CLAS, HERMES, and EMC.
 The figure is 3.4 inches square with a square plotting panel, sized for one
 column in a two-column manuscript. Explicit text sizes (7.5 pt ticks and legend,
 13 pt axis labels, and a 9.5 pt charged-hadron annotation) approximately match
