@@ -1,6 +1,6 @@
 version: 1
 name: CLAS_2021
-description: Supplied table cuts; illustrative inclusive bins and exact Fig. 2-3 Q2/nu bins, no angular acceptance.
+description: Published CLAS figure binning.
 beam: {energy: 5.014, mass: 0.00051099895, direction: -z}
 frame: TRF
 species:
@@ -14,17 +14,22 @@ event_cuts:
 hadron_cuts:
   pT2: {max: 1.5}
 histograms:
+  # Fig. 1
   - name: zh
+    event_cuts:
+      Q2: {min: 1.0, max: 4.0}
     axes:
-      - {variable: zh, min: 0, max: 1, bins: 10, density: true}
-  - name: zh_pt2_nu
-    axes:
-      - {variable: zh, min: 0, max: 1, bins: 10, density: true}
-      - {variable: pT2, edges: [0, 0.3, 0.6, 1.0, 1.5], density: true}
-      - {variable: nu, edges: [2.20, 3, 3.5, 4.25]}
-  # Figs. 2-3: exact Table III-VIII bin edges. Existing histograms above stay unchanged.
+      - {variable: zh, edges: [0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], density: true}
+  # Figs. 2-3
   - name: zh_Q2_nu
     axes:
       - {variable: zh, edges: [0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], density: true}
       - {variable: Q2, edges: [1.0, 1.3, 1.8, 4.1]}
       - {variable: nu, edges: [2.2, 3.2, 3.7, 4.2]}
+  # Figs. 4-5
+  - name: pt2_zh
+    event_cuts:
+      nu: {min: 2.2, max: 4.2}
+    axes:
+      - {variable: pT2, edges: [0.047, 0.073, 0.112, 0.173, 0.267, 0.411, 0.633, 0.974, 1.500], density: true}
+      - {variable: zh, edges: [0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]}
