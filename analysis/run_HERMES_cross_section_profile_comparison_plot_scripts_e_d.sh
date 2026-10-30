@@ -5,7 +5,8 @@ shopt -s nullglob
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PLOT_SCRIPT_DIR="${SCRIPT_DIR}/scripts/HERMES/cross_section_profile_comparison/e_d"
 EXPERIMENTAL_DATA_DIR="${SCRIPT_DIR}/experimental_data"
-OUTPUT_DIR="${SCRIPT_DIR}/output/HERMES/cross_section_profile_comparison/e_d"
+DATA_DIR="${SCRIPT_DIR}/output/data/HERMES/cross_section_profile_comparison/R_A/d"
+OUTPUT_DIR="${SCRIPT_DIR}/output/plots/HERMES/cross_section_profile_comparison/R_A"
 PYTHON="${PYTHON:-python3}"
 FAILURES=0
 ZH_SCALING_FACTORS=(100 20 5 1)
@@ -20,7 +21,7 @@ run_plot() {
 
   local profile_files=()
   local profile
-  for profile in "${OUTPUT_DIR}"/profile_*.yoda; do
+  for profile in "${DATA_DIR}"/profile_*.yoda; do
     if [[ -s "${profile}" ]]; then
       profile_files+=("${profile}")
     else
@@ -28,13 +29,12 @@ run_plot() {
     fi
   done
   if ((${#profile_files[@]} == 0)); then
-    echo "[warn] no nonempty profile_*.yoda files found in ${OUTPUT_DIR}; skipping ${script_name}." >&2
-    return 0
+    echo "[warn] no nonempty profile_*.yoda files found in ${DATA_DIR}; plotting available experimental data for ${script_name}." >&2
   fi
 
   if ! "${PYTHON}" "${PLOT_SCRIPT_DIR}/${script_name}" \
     --profile-files "${profile_files[@]}" \
-    --hepdata-dir "${EXPERIMENTAL_DATA_DIR}/HERMES/e_d/${observable_dir}" \
+    --hepdata-dir "${EXPERIMENTAL_DATA_DIR}/HERMES/R_A/d/${observable_dir}" \
     --output-dir "${OUTPUT_DIR}" \
     --output-filename "${output_filename}" \
     "$@"; then

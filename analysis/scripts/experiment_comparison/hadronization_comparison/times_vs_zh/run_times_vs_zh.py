@@ -5,6 +5,7 @@ import argparse
 import json
 from pathlib import Path
 from plot_times_vs_zh import plot_samples
+from plot_inputs import warn_skip
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -20,7 +21,8 @@ def run(config_path, output_dir):
     root = config_path.parent
     samples = config["samples"]
     if not samples:
-        raise ValueError("Config must contain at least one sample")
+        warn_skip("No samples configured for hadronization-time figure")
+        return []
     paths, labels = [], []
     for sample in samples:
         if "yoda" not in sample:

@@ -18,6 +18,7 @@ from matplotlib.ticker import AutoMinorLocator, MultipleLocator
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from hermes2007 import load_ratio
+from plot_inputs import optional_data, warn_skip
 
 
 class DataLegendHandle:
@@ -354,7 +355,7 @@ def load_sim_ra(scenario, nucleus: str, species: str, hist_path: str):
 
     if hist_path != f"/HERMES_2007/zh/multiplicity_{species}":
         raise ValueError("R_A requires /HERMES_2007/zh histograms; regenerate the analyzer output")
-    return load_ratio(nucleus_path, deuterium, "zh", species)
+    return optional_data(load_ratio, nucleus_path, deuterium, "zh", species)
 
 
 def main():
@@ -391,6 +392,7 @@ def main():
                 "..",
                 "..",
                 "output",
+                "plots",
                 "HERMES",
                 "model_comparison",
                 "R_A",
@@ -528,6 +530,7 @@ def main():
                     fontsize=10,
                 )
 
+    plotted_scenarios = set()
     data_handle_added = False
     for particle in particles:
         hist_path = full_hist_path(hist_base, hist_pattern, particle, args.raw)
@@ -545,9 +548,10 @@ def main():
 
             for scenario in scenarios:
                 sim = load_sim_ra(scenario, nucleus, particle, hist_path)
-                if sim is None:
+                if sim is None or not sim[0]:
                     continue
                 sx, sy, se = sim
+                plotted_scenarios.add(scenario["label"])
                 if exp_points is not None:
                     ex, spans, *_ = exp_points
                     positions = {round((lo + hi) / 2, 8): x for x, (lo, hi) in zip(ex, spans)}
@@ -607,6 +611,11 @@ def main():
                 )
                 data_handle_added = True
 
+    if not plotted_scenarios and not data_handle_added:
+        warn_skip("No available data for R_A figure")
+        plt.close(fig)
+        return
+
     scenario_handles = [
         Line2D(
             [0],
@@ -616,7 +625,7 @@ def main():
             linewidth=1.1,
             label=scenario["label"],
         )
-        for scenario in scenarios
+        for scenario in scenarios if scenario["label"] in plotted_scenarios
     ]
     first_ax = main_axes[(particles[0], nuclei[0])]
     sim_legend = first_ax.legend(

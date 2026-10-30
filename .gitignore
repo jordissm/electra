@@ -72,6 +72,10 @@ AGENTS.md
 !/analysis/run_hadronization_comparison_times_vs_zh.sh
 !/analysis/run_CLAS_cross_section_profile_comparison_plot_scripts_R_A.sh
 !/analysis/run_EMC_cross_section_profile_comparison_plot_scripts_R_A.sh
+!/analysis/run_CLAS_model_comparison_plot_scripts_R_A.sh
+!/analysis/run_EMC_model_comparison_plot_scripts_R_A.sh
+!/analysis/run_CLAS_plot_scripts.sh
+!/analysis/run_EMC_plot_scripts.sh
 !/analysis/experimental_data/
 /analysis/experimental_data/**
 !/analysis/experimental_data/CLAS/

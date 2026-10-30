@@ -1,5 +1,5 @@
 {
   "particles": ["pip", "pim"],
   "nuclei": ["C", "Fe", "Pb"],
-  "profile_directory": "../../../../output/CLAS/cross_section_profile_comparison/R_A"
+  "profile_directory": "../../../../output/data/CLAS/cross_section_profile_comparison/R_A"
 }

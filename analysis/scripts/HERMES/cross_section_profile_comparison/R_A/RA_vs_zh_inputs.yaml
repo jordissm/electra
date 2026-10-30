@@ -3,5 +3,5 @@
   "histogram_pattern": "{base}_{species}",
   "particles": ["pip", "pi0", "pim", "kp", "km", "p", "pbar"],
   "nuclei": ["He", "Ne", "Kr", "Xe"],
-  "profile_directory": "../../../../output/HERMES/cross_section_profile_comparison/R_A"
+  "profile_directory": "../../../../output/data/HERMES/cross_section_profile_comparison/R_A"
 }

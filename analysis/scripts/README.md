@@ -16,10 +16,14 @@ CLAS/
   clas2021.py                         CLAS YAML multiplicity reader
   cross_section_profile_comparison/
     R_A/                             charged-pion ratios versus z_h, inclusive and Q2/nu binned
+  model_comparison/
+    R_A/                             the same three pion figures, comparing transport models
 EMC/
   emc1991.py                         single-energy EMC charged-hadron multiplicity reader
   cross_section_profile_comparison/
     R_A/                             EMC Fig. 4 / eHIJING Fig. 18, C/Cu/Sn
+  model_comparison/
+    R_A/                             the same charged-hadron figure, comparing transport models
 experiment_comparison/
   hadronization_comparison/
     times_vs_zh/                     HERMES, EMC and CLAS time profiles
@@ -31,9 +35,15 @@ names and arguments. Direct Python paths now include the experiment directory.
 The time comparison uses multiple experiments, so it lives under
 `experiment_comparison/`. Its present HERMES selection is described in the
 [time analysis guide](../../docs/analysis/times-vs-zh.md).
-Data and output locations remain under `analysis/experimental_data/` and
-`analysis/output/<EXPERIMENT>/`. Input paths in plot configs resolve relative
-to the config file, independently of the working directory.
+Experimental tables live under `analysis/experimental_data/<EXPERIMENT>/`.
+Simulation inputs live under `analysis/output/data/<EXPERIMENT>/` and figures
+under `analysis/output/plots/<EXPERIMENT>/`, followed by the comparison and
+observable directories. HERMES e+d plots use the deuterium files in
+`data/HERMES/<COMPARISON>/R_A/d/` and experimental tables in
+`analysis/experimental_data/HERMES/R_A/d/`; their figures go to
+`plots/HERMES/<COMPARISON>/R_A/` beneath `analysis/output/`, alongside the
+nuclear-ratio figures. Input paths in plot
+configs resolve relative to the config file, independently of the working directory.
 
 ## Run every plotting workflow
 
@@ -44,34 +54,82 @@ bash analysis/run_all_plot_scripts.sh
 ```
 
 The runner invokes all four HERMES model/profile workflows (including the
-poster and Fig. 2 plots), all three CLAS pion figures, the EMC comparison, and the configured time
-comparison. It continues after errors and exits with status 1 if any workflow
-fails, listing the failed workflows at the end. Existing launchers retain
-their output directories. The time comparison writes one panel containing
-production and formation curves for CLAS, HERMES, and EMC to
+poster and Fig. 2 plots), both CLAS workflows with three pion figures each,
+both EMC comparisons, and the configured time comparison. Missing or empty
+inputs and absent requested histograms produce
+warnings; only the affected samples or curves are skipped. Available experimental
+points and simulations are still plotted, with legend entries for the curves
+that were drawn. If a figure has no available data, it is skipped successfully
+without writing a new figure. Existing figure files are left in place. Invalid
+configs, malformed supplied data, and incompatible bins or metadata still fail.
+The runner continues after these errors and exits with status 1 if any workflow
+fails, listing the failed workflows at the end. Launchers use the same input
+and figure defaults as the Python scripts. The time comparison writes one panel
+containing production and formation curves for CLAS, HERMES, and EMC to
 `analysis/output/plots/experiment_comparison/times_vs_zh/`. Run it on its own
 with `bash analysis/run_hadronization_comparison_times_vs_zh.sh`; it uses the
 same input and output defaults as the all-plots runner.
 
-The CLAS workflow uses its supplied `RA_vs_zh_inputs.yaml` by default and
-requires the configured simulation files. Use `--clas-data-only` to plot the
-published data when those inputs are unavailable, or `--clas-config FILE`
-to select another profile config. The time comparison uses the local
+The CLAS workflows use their supplied `RA_vs_zh_inputs.yaml` by default and plot
+the published data when simulation inputs are unavailable. Use `--clas-data-only`
+to omit simulation overlays from both comparisons, `--clas-config FILE` to select
+another profile config, or `--clas-model-config FILE` to select another model
+config. The time comparison uses the local
 `times_vs_zh_inputs.json` if present, otherwise the three-experiment example;
 `--times-config FILE` selects a different set of samples and
 `--times-output-dir DIR` changes its figure destination. Paths provided on
 the command line resolve relative to your working directory.
 
-Use `--dry-run` to inspect all seven commands without creating figures or
+Use `--dry-run` to inspect all nine commands without creating figures or
 `--help` for the options. Set `PYTHON=/path/to/python` to select an interpreter
 with Matplotlib. The runner reads existing analysis outputs; it does not
 generate simulation events.
 
 The EMC workflow reads `analysis/experimental_data/EMC/R_A/Fig4.csv`, which
 is pending the original experimental table. Use `--emc-data-file FILE` to
-select another CSV, `--emc-config FILE` to select simulation profiles, or
-`--emc-data-only` to omit simulation overlays. Missing measurements produce
-an explicit error and are included in the runner's failure summary.
+select another CSV, `--emc-config FILE` to select simulation profiles,
+`--emc-model-config FILE` to select model inputs, or `--emc-data-only` to omit
+simulation overlays from both comparisons. Missing measurements are skipped;
+available simulation curves are still plotted. If neither source is available,
+the EMC figure is skipped without failing the runner.
+
+## CLAS and EMC model comparisons
+
+Run either model workflow from any working directory using its launcher path:
+
+```bash
+bash analysis/run_CLAS_model_comparison_plot_scripts_R_A.sh
+bash analysis/run_EMC_model_comparison_plot_scripts_R_A.sh
+```
+
+The CLAS launcher produces the inclusive pion figure and both Q2/nu-binned pion
+figures. The EMC launcher produces the C/Cu/Sn charged-hadron figure. The model
+entry points reuse the profile plotters' layouts, experimental tables, ratio
+readers, uncertainty handling, and missing-input behavior. Each model directory
+contains its own `RA_vs_zh_inputs.yaml`, loaded by default by both the launcher
+and direct Python entry points. Use `--config FILE` to override it, `--data-only`
+to omit simulations, or `--no-exp` to omit experimental points. Other figure
+options are shared with the corresponding profile plotter.
+
+Model inputs are read from
+`analysis/output/data/<EXPERIMENT>/model_comparison/R_A/{d,<TARGET>}/` and figures
+are written to `analysis/output/plots/<EXPERIMENT>/model_comparison/R_A/`.
+The supplied configs compare `ehijing.yoda`, `ehijing-smash-decays-only.yoda`,
+and `ehijing-smash-decays-collisions.yoda` using black dotted, dash-dot, and solid
+lines, respectively. The baseline filename follows the existing CLAS model
+input. Edit the explicit paths and labels if your sample uses another filename
+or decay treatment; the scripts do not infer that treatment from the baseline.
+
+CLAS config entries use `deuterium` and a `nuclei` mapping, like HERMES. EMC
+entries use the `samples` format documented below: each target/deuterium pair
+must have matching beam energy and analysis definitions. For separate EMC beam
+energies, add separate sample pairs with explicit paths; the reader retains
+each energy separately and does not average them.
+
+Use `bash analysis/run_CLAS_plot_scripts.sh` or
+`bash analysis/run_EMC_plot_scripts.sh` to run both comparisons for one
+experiment. These aggregate launchers select the corresponding config for each
+comparison and forward any additional plotting options to both workflows.
 
 ## CLAS Fig. 1
 
@@ -83,7 +141,7 @@ bash analysis/run_CLAS_cross_section_profile_comparison_plot_scripts_R_A.sh
 
 The CLAS launcher writes `RA_vs_zh.pdf` and `RA_vs_zh.png` plus the two binned
 figures described below to
-`analysis/output/CLAS/cross_section_profile_comparison/R_A/`. Use `--output-dir`
+`analysis/output/plots/CLAS/cross_section_profile_comparison/R_A/`. Use `--output-dir`
 and `--output-filename` to choose another destination. The experimental points
 come from [Table II of arXiv:2109.09951v2](https://arxiv.org/abs/2109.09951v2),
 stored in `analysis/experimental_data/CLAS/R_A/TableII.csv`. There are ten
@@ -106,7 +164,7 @@ bash analysis/run_CLAS_cross_section_profile_comparison_plot_scripts_R_A.sh \
 ```
 
 The supplied config matches `profile_XXXXXX.yoda` under
-`analysis/output/CLAS/cross_section_profile_comparison/R_A/{d,C,Fe,Pb}/`.
+`analysis/output/data/CLAS/cross_section_profile_comparison/R_A/{d,C,Fe,Pb}/`.
 Alternatively, replace `profile_directory` with explicit scenarios:
 
 ```json
@@ -130,8 +188,9 @@ Alternatively, replace `profile_directory` with explicit scenarios:
 JSON configs work without PyYAML; other YAML syntax requires PyYAML.
 Profile IDs use the same colors, labels and line styles as the HERMES profile
 plot. `--no-errorbars` suppresses simulation bands; `--no-exp` plots only
-simulation and requires `--config`. Missing/empty configured inputs or
-incompatible histograms are errors.
+simulation and requires `--config`. Missing/empty configured inputs and absent
+histograms are skipped with warnings.
+Incompatible supplied histograms remain errors.
 
 Use the [configurable analyzer](../../docs/analysis/yaml-oscar.md) to obtain
 `/CLAS_2021/zh/multiplicity_pip` and `multiplicity_pim`. The reader divides
@@ -212,7 +271,7 @@ bash analysis/run_EMC_cross_section_profile_comparison_plot_scripts_R_A.sh \
 ```
 
 This writes PDF and PNG copies of `RA_vs_zh` under
-`analysis/output/EMC/cross_section_profile_comparison/R_A/`. Place the table
+`analysis/output/plots/EMC/cross_section_profile_comparison/R_A/`. Place the table
 at `analysis/experimental_data/EMC/R_A/Fig4.csv` to use the default.
 The CSV requires `nucleus,z,R`, plus either a single absolute `error` or
 separate absolute `stat,sys`. Optional `z_low,z_high` specify bin bounds;

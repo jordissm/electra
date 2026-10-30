@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 
 from hermes2007 import load_ratio
+from plot_inputs import optional_data, warn_skip
 from model_comparison.R_A.plot_RA_vs_zh import load_yaml_config, particle_from_description
 
 
@@ -60,6 +61,8 @@ def main():
     fig, axes = plt.subplots(len(args.particles), 3, squeeze=False,
                              figsize=(11, 2.6 * len(args.particles)), sharey=True)
     plotted = 0
+    plotted_nuclei = set()
+    plotted_scenarios = set()
     for ip, species in enumerate(args.particles):
         for column, axis in enumerate(AXES):
             ax = axes[ip, column]
@@ -75,23 +78,31 @@ def main():
                 cut = {"nu": r"$z_h>0.2$", "zh": r"$\nu>6$ GeV", "Q2": r"$\nu>6$ GeV, $z_h>0.2$"}[axis]
                 ax.set_title(cut, fontsize=10)
             for nucleus in nuclei:
-                points = [] if args.no_exp else experimental_points(args.data_dir, nucleus, axis, species)
+                points = [] if args.no_exp else (optional_data(experimental_points, args.data_dir, nucleus, axis, species) or [])
                 # Plot a bin average at the paper's quoted mean, including its wide last bin.
                 positions = {round((row[1] + row[2]) / 2, 8): row[0] for row in points}
                 for scenario in scenarios:
                     nucleus_file = scenario["nuclei"].get(nucleus)
                     if not nucleus_file:
-                        raise ValueError(f"Scenario {scenario['label']} has no {nucleus} input")
-                    x, y, error = load_ratio(nucleus_file, scenario["deuterium"], axis, species)
+                        warn_skip(f"Scenario {scenario['label']} has no {nucleus} input")
+                        continue
+                    values = optional_data(load_ratio, nucleus_file, scenario["deuterium"], axis, species)
+                    if values is None:
+                        continue
+                    x, y, error = values
                     x = [positions.get(round(value, 8), value) for value in x]
                     if not x:
                         continue
                     plotted += 1
+                    plotted_nuclei.add(nucleus)
+                    plotted_scenarios.add(scenario["label"])
                     ax.plot(x, y, color=colors[nucleus], linestyle=scenario["linestyle"], linewidth=1.2)
                     if not args.no_errorbars:
                         ax.fill_between(x, [v - e for v, e in zip(y, error)],
                                         [v + e for v, e in zip(y, error)], color=colors[nucleus], alpha=0.1)
                 if points:
+                    plotted += 1
+                    plotted_nuclei.add(nucleus)
                     ax.errorbar([r[0] for r in points], [r[3] for r in points],
                                 yerr=[max(abs(r[4]), abs(r[5])) for r in points],
                                 fmt="o", markersize=3, color=colors[nucleus], linewidth=0.7)
@@ -99,9 +110,11 @@ def main():
                                 yerr=[math.hypot(max(abs(r[4]), abs(r[5])), max(abs(r[6]), abs(r[7]))) for r in points],
                                 fmt="none", color=colors[nucleus], linewidth=0.5, capsize=2)
     if not plotted:
-        raise ValueError("No ratios have a populated DIS bin and nonzero deuterium yield")
-    handles = [Line2D([], [], color=colors[n], label=n) for n in nuclei]
-    handles += [Line2D([], [], color="black", linestyle=s["linestyle"], label=s["label"]) for s in scenarios]
+        warn_skip("No available data for HERMES Fig. 2")
+        plt.close(fig)
+        return
+    handles = [Line2D([], [], color=colors[n], label=n) for n in nuclei if n in plotted_nuclei]
+    handles += [Line2D([], [], color="black", linestyle=s["linestyle"], label=s["label"]) for s in scenarios if s["label"] in plotted_scenarios]
     fig.legend(handles=handles, loc="lower center", ncol=min(4, len(handles)), fontsize=9)
     fig.tight_layout(rect=(0, 0.10, 1, 1))
     output = Path(args.output_dir)

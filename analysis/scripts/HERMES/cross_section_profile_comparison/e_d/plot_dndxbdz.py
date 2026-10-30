@@ -4,6 +4,8 @@ import csv
 import math
 import os
 import re
+from pathlib import Path
+import sys
 from typing import Dict, List, Optional, Tuple
 
 import matplotlib.pyplot as plt
@@ -13,6 +15,9 @@ from matplotlib.patches import Rectangle
 from matplotlib.ticker import AutoMinorLocator, LogLocator, NullFormatter
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+ANALYSIS_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "..", "..", ".."))
+sys.path.insert(0, str(Path(ANALYSIS_DIR) / "scripts"))
+from plot_inputs import MissingDataError, available_file, optional_data, warn_skip
 
 # Show only the early/late formation limits; color identifies the z_h bin.
 PROFILE_STYLES = {
@@ -122,7 +127,7 @@ def parse_yoda_histo1d_v2(path: str, hist_path: str) -> Dict[str, object]:
             bins.append((xlow, xhigh, sumw, sumw2, sumwx, sumwx2, num_entries))
 
     if not bins:
-        raise RuntimeError(f"Did not find bins for hist '{hist_path}' in '{path}'")
+        raise MissingDataError(f"Did not find bins for hist '{hist_path}' in '{path}'")
     return {"scaledBy": scaled_by, "bins": bins}
 
 
@@ -234,7 +239,7 @@ def load_hepdata_deuteron_points(
             sys_errs.append(max(abs(float(row[5])), abs(float(row[6]))))
 
     if not xs:
-        raise RuntimeError(f"No Deuteron HEPData points found in '{path}'")
+        raise MissingDataError(f"No Deuteron HEPData points found in '{path}'")
     return xs, ys, stat_errs, sys_errs
 
 
@@ -272,13 +277,12 @@ def build_formation_time_scenario_defs(yoda_paths: List[str]):
         label = formation_time_label(path)
         if label not in scenario_styles:
             continue
-        if os.path.getsize(path) == 0:
-            print(f"[warn] Empty YODA file: {path}; skipping.")
+        if not available_file(path):
             continue
         linestyle = scenario_styles[label]
         scenario_defs.append(([path], label, linestyle))
     if not scenario_defs:
-        raise ValueError("No nonempty early/late formation YODA files to compare")
+        warn_skip("No nonempty early/late formation YODA files to compare")
     return scenario_defs
 
 
@@ -359,8 +363,8 @@ def main():
         "--profile-files",
         "--tau-files",
         dest="profile_files",
-        nargs="+",
-        required=True,
+        nargs="*",
+        default=[],
         help=(
             "Input profile_XXXXXX.yoda files; only profile_000000 (Early formation) "
             "and profile_000005 (Late formation) are plotted. "
@@ -406,7 +410,7 @@ def main():
     ap.add_argument(
         "--hepdata-dir",
         default=os.path.join(
-            SCRIPT_DIR, "experimental_data", "HERMES", "e_d", "DNDXBDZ"
+            ANALYSIS_DIR, "experimental_data", "HERMES", "R_A", "d", "DNDXBDZ"
         ),
         help=(
             "Directory containing HEPData-ins1208547-v1-Table_*.csv files "
@@ -431,8 +435,13 @@ def main():
     )
     ap.add_argument(
         "--output-dir",
-        default=SCRIPT_DIR,
-        help="Directory for the output image. Defaults to the script directory.",
+        default=os.path.join(
+            ANALYSIS_DIR, "output", "plots", "HERMES", "cross_section_profile_comparison", "R_A"
+        ),
+        help=(
+            "Directory for the output image (default: "
+            "analysis/output/plots/HERMES/cross_section_profile_comparison/R_A)."
+        ),
     )
     ap.add_argument(
         "--output-filename",
@@ -480,6 +489,8 @@ def main():
         check_hepdata_system_and_energy(hepdata_index.values())
 
     scenario_defs = build_formation_time_scenario_defs(args.profile_files)
+    has_experimental_data = False
+    plotted_scenarios = set()
     panel_defs = [
         ("pip", r"$\boldsymbol{\pi^+}$"),
         ("pim", r"$\boldsymbol{\pi^-}$"),
@@ -594,25 +605,33 @@ def main():
                 if exp_file is None:
                     print(f"[warn] Missing HEPData table for {suf} {zh_tag}")
                 else:
-                    ex, ey, estat, esys = load_hepdata_deuteron_points(exp_file)
-                    ex_spans = bin_spans_from_edges(len(ex), args.xb_bin_edges)
-                    ex_p, ey_p, estat_p, esys_p, ex_spans_p = [], [], [], [], []
-                    for x, y, stat, sys, span in zip(ex, ey, estat, esys, ex_spans):
-                        if y > 0 and math.isfinite(y):
-                            ex_p.append(x)
-                            ey_p.append(y * zh_scale)
-                            estat_p.append(stat * zh_scale)
-                            esys_p.append(sys * zh_scale)
-                            ex_spans_p.append(span)
-                    exp_points = (ex_p, ey_p, estat_p, esys_p, ex_spans_p)
+                    values = optional_data(load_hepdata_deuteron_points, exp_file)
+                    if values is not None:
+                        ex, ey, estat, esys = values
+                        ex_spans = bin_spans_from_edges(len(ex), args.xb_bin_edges)
+                        ex_p, ey_p, estat_p, esys_p, ex_spans_p = [], [], [], [], []
+                        for x, y, stat, sys, span in zip(ex, ey, estat, esys, ex_spans):
+                            if y > 0 and math.isfinite(y):
+                                ex_p.append(x)
+                                ey_p.append(y * zh_scale)
+                                estat_p.append(stat * zh_scale)
+                                esys_p.append(sys * zh_scale)
+                                ex_spans_p.append(span)
+                        exp_points = (ex_p, ey_p, estat_p, esys_p, ex_spans_p)
+                        has_experimental_data = has_experimental_data or bool(ex_p)
 
             for paths, _scenario_label, linestyle in scenario_defs:
                 for yp in paths:
-                    d = parse_yoda_histo1d_v2(yp, hist_path)
+                    d = optional_data(parse_yoda_histo1d_v2, yp, hist_path)
+                    if d is None:
+                        continue
                     xs, ys, yerrs = build_xy(d["bins"])
                     xs_p, ys_p, yerrs_p = positive_points(
                         xs, ys, yerrs, zh_scale / args.scale
                     )
+                    if not xs_p:
+                        continue
+                    plotted_scenarios.add(_scenario_label)
                     if not args.no_errorbars:
                         y_low = [
                             max(y - ye, args.ylim[0] * 0.1)
@@ -706,13 +725,18 @@ def main():
         handlelength=3.0,
         borderaxespad=0.0,
     )
+    if not plotted_scenarios and not has_experimental_data:
+        warn_skip("No available data for HERMES spectrum figure")
+        plt.close(fig)
+        return
+
     scenario_handles = [
         Line2D([0], [0], color="black", linestyle=linestyle, linewidth=2.2, label=label)
-        for _paths, label, linestyle in scenario_defs
+        for _paths, label, linestyle in scenario_defs if label in plotted_scenarios
     ]
     legend_handles = list(scenario_handles)
     legend_labels = [handle.get_label() for handle in scenario_handles]
-    if not args.no_exp:
+    if has_experimental_data:
         legend_handles.extend(data_handles)
         legend_labels.append("HERMES")
     main_axes[0].legend(

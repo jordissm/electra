@@ -3,6 +3,10 @@
 from functools import lru_cache
 import math
 from pathlib import Path
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from plot_inputs import MissingDataError
 
 
 SELECTION = "HERMES_2007_FIG2_V1"
@@ -40,7 +44,7 @@ def spectrum(filename, axis, species):
         counts = histograms[f"{base}/counts_{species}"]
         dis = histograms[f"{base}/DIS"]
     except KeyError as exc:
-        raise ValueError(f"{filename}: missing {exc.args[0]}; rerun analyze_oscar_output.cpp") from exc
+        raise MissingDataError(f"{filename}: missing {exc.args[0]}; rerun analyze_oscar_output.cpp") from exc
     keys = ("Selection", "Acceptance", "BeamEnergyGeV", "BeamDirection")
     metadata = {key: counts["annotations"].get(key) for key in keys}
     dmeta = {key: dis["annotations"].get(key) for key in keys}

@@ -3,6 +3,10 @@
 from functools import lru_cache
 import math
 from pathlib import Path
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from plot_inputs import MissingDataError
 
 Q2_BINS = ((1.0, 1.3), (1.3, 1.8), (1.8, 4.1))
 NU_BINS = ((2.2, 3.2), (3.2, 3.7), (3.7, 4.2))
@@ -48,7 +52,7 @@ def spectrum(filename, species, *, q2_bin=None, nu_bin=None):
         base = "/CLAS_2021/zh"
     name = f"{base}/multiplicity_{species}"
     if name not in histograms:
-        raise ValueError(f"{filename}: missing {name}; regenerate CLAS YAML analyzer output with {histogram_name}")
+        raise MissingDataError(f"{filename}: missing {name}; regenerate CLAS YAML analyzer output with {histogram_name}")
     histogram = histograms[name]
     annotations = histogram["annotations"]
     required = {
@@ -70,7 +74,7 @@ def spectrum(filename, species, *, q2_bin=None, nu_bin=None):
                 raise ValueError(f"{filename}: {key} must match the published {variable} bin {bounds}")
         keys += ("Slice1", "Slice2")
     if not histogram["bins"]:
-        raise ValueError(f"{filename}: no bins in {name}")
+        raise MissingDataError(f"{filename}: no bins in {name}")
     return histogram["bins"], (provenance, tuple(annotations[k] for k in keys))
 
 

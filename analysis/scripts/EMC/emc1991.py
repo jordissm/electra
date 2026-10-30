@@ -4,6 +4,10 @@ from functools import lru_cache
 import math
 from pathlib import Path
 import re
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from plot_inputs import MissingDataError
 
 
 @lru_cache(maxsize=64)
@@ -36,6 +40,8 @@ def spectrum(filename):
     path = Path(filename).resolve()
     histograms, provenance = read_histograms(str(path), path.stat().st_mtime_ns)
     names = [name for name in histograms if re.fullmatch(r"/EMC_(100|280)/zh/multiplicity_charged", name)]
+    if not names:
+        raise MissingDataError(f"{filename}: missing EMC charged-hadron multiplicity histogram")
     if len(names) != 1:
         raise ValueError(f"{filename}: expected one /EMC_100/zh/multiplicity_charged or /EMC_280/zh/multiplicity_charged histogram")
     name = names[0]
@@ -54,7 +60,7 @@ def spectrum(filename):
             not math.isclose(float(annotations["BeamMassGeV"]), .1056583755, rel_tol=0, abs_tol=1e-8)):
         raise ValueError(f"{filename}: expected a {beam} GeV muon beam")
     if not histogram["bins"]:
-        raise ValueError(f"{filename}: no bins in {name}")
+        raise MissingDataError(f"{filename}: no bins in {name}")
     return beam, histogram["bins"], (provenance, tuple(annotations[k] for k in keys))
 
 

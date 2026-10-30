@@ -140,10 +140,10 @@ correlations are not interpreted as uncertainties on the means.
 The input layout separates experimental setups:
 
 ```text
-analysis/output/
-  CLAS/hadronization_comparison/times_vs_zh/multiplicities.yoda
-  HERMES/hadronization_comparison/times_vs_zh/multiplicities.yoda
-  EMC/hadronization_comparison/times_vs_zh/multiplicities.yoda
+analysis/output/data/
+  CLAS/times_vs_zh/multiplicities.yoda
+  HERMES/times_vs_zh/multiplicities.yoda
+  EMC/times_vs_zh/multiplicities.yoda
 ```
 
 Copy each setup's combined analyzer output to its corresponding path. Keep the
@@ -163,15 +163,18 @@ The launcher uses `times_vs_zh_inputs.json` beside the runner if present,
 otherwise the supplied three-experiment example. It writes one combined figure
 as PDF and PNG under `analysis/output/plots/experiment_comparison/times_vs_zh/`,
 matching the all-plots runner. Use `--config FILE` or `--output-dir DIR` to
-override these defaults.
+override these defaults. Missing files or requested time profiles are skipped
+with warnings while available samples are retained. If no populated samples
+remain, the figure is skipped successfully. Incompatible supplied metadata or
+bin edges still produce errors.
 
 Or pass files and labels directly:
 
 ```bash
 python3 analysis/scripts/experiment_comparison/hadronization_comparison/times_vs_zh/plot_times_vs_zh.py \
-  --inputs analysis/output/CLAS/hadronization_comparison/times_vs_zh/multiplicities.yoda \
-           analysis/output/HERMES/hadronization_comparison/times_vs_zh/multiplicities.yoda \
-           analysis/output/EMC/hadronization_comparison/times_vs_zh/multiplicities.yoda \
+  --inputs analysis/output/data/CLAS/times_vs_zh/multiplicities.yoda \
+           analysis/output/data/HERMES/times_vs_zh/multiplicities.yoda \
+           analysis/output/data/EMC/times_vs_zh/multiplicities.yoda \
   --labels CLAS HERMES EMC \
   --output-dir analysis/output/plots/experiment_comparison/times_vs_zh
 ```

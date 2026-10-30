@@ -4,6 +4,8 @@ import csv
 import math
 import os
 import re
+from pathlib import Path
+import sys
 from typing import Dict, List, Tuple, Optional
 
 import matplotlib.pyplot as plt
@@ -13,6 +15,9 @@ from matplotlib.lines import Line2D
 from matplotlib.patches import Rectangle
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+ANALYSIS_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "..", "..", ".."))
+sys.path.insert(0, str(Path(ANALYSIS_DIR) / "scripts"))
+from plot_inputs import MissingDataError, available_file, optional_data, warn_skip
 
 
 class DataLegendHandle:
@@ -132,7 +137,7 @@ def parse_yoda_histo1d_v2(path: str, hist_path: str) -> Dict[str, object]:
             bins.append((xlow, xhigh, sumw, sumw2, sumwx, sumwx2, num_entries))
 
     if not bins:
-        raise RuntimeError(f"Did not find bins for hist '{hist_path}' in '{path}'")
+        raise MissingDataError(f"Did not find bins for hist '{hist_path}' in '{path}'")
 
     return {"scaledBy": scaled_by, "bins": bins}
 
@@ -264,7 +269,7 @@ def load_hepdata_deuteron_points(
             sys_errs.append(sys)
 
     if not xs:
-        raise RuntimeError(f"No Deuteron HEPData points found in '{path}'")
+        raise MissingDataError(f"No Deuteron HEPData points found in '{path}'")
 
     return xs, ys, stat_errs, sys_errs
 
@@ -430,10 +435,7 @@ def main():
     ap.add_argument(
         "--hepdata-dir",
         default=os.path.join(
-            os.path.dirname(__file__),
-            "experimental_data",
-            "HERMES",
-            "DNDQ2DZ",
+            ANALYSIS_DIR, "experimental_data", "HERMES", "R_A", "d", "DNDQ2DZ"
         ),
         help=(
             "Directory containing HEPData-ins1208547-v1-Table_*.csv files "
@@ -459,8 +461,13 @@ def main():
     )
     ap.add_argument(
         "--output-dir",
-        default=SCRIPT_DIR,
-        help="Directory for the output image. Defaults to the script directory.",
+        default=os.path.join(
+            ANALYSIS_DIR, "output", "plots", "HERMES", "model_comparison", "R_A"
+        ),
+        help=(
+            "Directory for the output image (default: "
+            "analysis/output/plots/HERMES/model_comparison/R_A)."
+        ),
     )
     ap.add_argument(
         "--output-filename",
@@ -533,6 +540,8 @@ def main():
         ),
     ]
 
+    has_experimental_data = False
+    plotted_scenarios = set()
     panel_defs = [
         ("pip", r"$\boldsymbol{\pi^+}$", "+"),
         ("pim", r"$\boldsymbol{\pi^-}$", "-"),
@@ -647,25 +656,33 @@ def main():
                 if exp_file is None:
                     print(f"[warn] Missing HEPData table for {suf} {zh_tag}")
                 else:
-                    ex, ey, estat, esys = load_hepdata_deuteron_points(exp_file)
-                    ex_spans = bin_spans_from_edges(len(ex), args.q2_bin_edges)
-                    ex_p, ey_p, estat_p, esys_p, ex_spans_p = [], [], [], [], []
-                    for x, y, stat, sys, span in zip(ex, ey, estat, esys, ex_spans):
-                        if y > 0 and math.isfinite(y):
-                            ex_p.append(x)
-                            ey_p.append(y * zh_scale)
-                            estat_p.append(stat * zh_scale)
-                            esys_p.append(sys * zh_scale)
-                            ex_spans_p.append(span)
-                    exp_points = (ex_p, ey_p, estat_p, esys_p, ex_spans_p)
+                    values = optional_data(load_hepdata_deuteron_points, exp_file)
+                    if values is not None:
+                        ex, ey, estat, esys = values
+                        ex_spans = bin_spans_from_edges(len(ex), args.q2_bin_edges)
+                        ex_p, ey_p, estat_p, esys_p, ex_spans_p = [], [], [], [], []
+                        for x, y, stat, sys, span in zip(ex, ey, estat, esys, ex_spans):
+                            if y > 0 and math.isfinite(y):
+                                ex_p.append(x)
+                                ey_p.append(y * zh_scale)
+                                estat_p.append(stat * zh_scale)
+                                esys_p.append(sys * zh_scale)
+                                ex_spans_p.append(span)
+                        exp_points = (ex_p, ey_p, estat_p, esys_p, ex_spans_p)
+                        has_experimental_data = has_experimental_data or bool(ex_p)
 
             for paths, _scenario_label, linestyle in scenario_defs:
                 for yp in paths:
-                    d = parse_yoda_histo1d_v2(yp, hist_path)
+                    d = optional_data(parse_yoda_histo1d_v2, yp, hist_path)
+                    if d is None:
+                        continue
                     xs, ys, yerrs = build_xy(d["bins"])
                     xs_p, ys_p, yerrs_p = positive_points(
                         xs, ys, yerrs, zh_scale / args.scale
                     )
+                    if not xs_p:
+                        continue
+                    plotted_scenarios.add(_scenario_label)
                     if not args.no_errorbars:
                         y_low = [
                             max(y - ye, args.ylim[0] * 0.1)
@@ -760,9 +777,14 @@ def main():
         fontsize=15,
         borderaxespad=0.0,
     )
+    if not plotted_scenarios and not has_experimental_data:
+        warn_skip("No available data for HERMES spectrum figure")
+        plt.close(fig)
+        return
+
     scenario_handles = [
         Line2D([0], [0], color="black", linestyle=linestyle, linewidth=2.2, label=label)
-        for _paths, label, linestyle in scenario_defs
+        for _paths, label, linestyle in scenario_defs if label in plotted_scenarios
     ]
     sim_legend = main_axes[0].legend(
         handles=scenario_handles,
@@ -772,7 +794,7 @@ def main():
         fontsize=15,
         borderaxespad=0.0,
     )
-    if not args.no_exp:
+    if has_experimental_data:
         main_axes[0].add_artist(sim_legend)
         main_axes[0].legend(
             handles=data_handles,

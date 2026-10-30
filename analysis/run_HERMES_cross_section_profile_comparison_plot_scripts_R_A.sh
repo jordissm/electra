@@ -4,7 +4,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PLOT_SCRIPT_DIR="${SCRIPT_DIR}/scripts/HERMES/cross_section_profile_comparison/R_A"
 EXPERIMENTAL_DATA_DIR="${SCRIPT_DIR}/experimental_data"
-OUTPUT_DIR="${SCRIPT_DIR}/output/HERMES/cross_section_profile_comparison/R_A"
+OUTPUT_DIR="${SCRIPT_DIR}/output/plots/HERMES/cross_section_profile_comparison/R_A"
 PYTHON="${PYTHON:-python3}"
 FAILURES=0
 

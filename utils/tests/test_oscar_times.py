@@ -10,6 +10,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -257,6 +258,26 @@ class OscarTimesTest(unittest.TestCase):
         other.write_text(prefix + "BEGIN YODA_PROFILE1D_V2 " + profiles)
         with self.assertRaisesRegex(ValueError, "inconsistent production/formation"):
             load_sample(other)
+
+    @unittest.skipUnless(importlib.util.find_spec("matplotlib"), "Matplotlib required for rendered output checks")
+    def test_plot_skips_missing_samples_and_keeps_available_label(self):
+        from matplotlib.axes import Axes
+
+        self.fixture([[self.particle()]])
+        self.execute()
+        labels = []
+        original_legend = Axes.legend
+
+        def capture_legend(axis, *args, **kwargs):
+            labels.extend(handle.get_label() for handle in kwargs["handles"])
+            return original_legend(axis, *args, **kwargs)
+
+        with patch.object(Axes, "legend", capture_legend):
+            outputs = plot_samples([self.root / "absent.yoda", self.output],
+                                   ["Absent", "Available"], self.root / "plots")
+        self.assertEqual(len(outputs), 2)
+        self.assertIn("Available", labels)
+        self.assertNotIn("Absent", labels)
 
     @unittest.skipUnless(importlib.util.find_spec("matplotlib"), "Matplotlib required for rendered output checks")
     def test_plot_wrapper_needs_only_yoda(self):

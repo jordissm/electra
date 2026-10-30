@@ -1,0 +1,70 @@
+{
+  "scenarios": [
+    {
+      "label": "eHIJING",
+      "linestyle": ":",
+      "color": "black",
+      "samples": [
+        {
+          "nucleus": "C",
+          "nuclear": "../../../../output/data/EMC/model_comparison/R_A/C/ehijing.yoda",
+          "deuterium": "../../../../output/data/EMC/model_comparison/R_A/d/ehijing.yoda"
+        },
+        {
+          "nucleus": "Cu",
+          "nuclear": "../../../../output/data/EMC/model_comparison/R_A/Cu/ehijing.yoda",
+          "deuterium": "../../../../output/data/EMC/model_comparison/R_A/d/ehijing.yoda"
+        },
+        {
+          "nucleus": "Sn",
+          "nuclear": "../../../../output/data/EMC/model_comparison/R_A/Sn/ehijing.yoda",
+          "deuterium": "../../../../output/data/EMC/model_comparison/R_A/d/ehijing.yoda"
+        }
+      ]
+    },
+    {
+      "label": "eHIJING + SMASH (dec. only)",
+      "linestyle": "-.",
+      "color": "black",
+      "samples": [
+        {
+          "nucleus": "C",
+          "nuclear": "../../../../output/data/EMC/model_comparison/R_A/C/ehijing-smash-decays-only.yoda",
+          "deuterium": "../../../../output/data/EMC/model_comparison/R_A/d/ehijing-smash-decays-only.yoda"
+        },
+        {
+          "nucleus": "Cu",
+          "nuclear": "../../../../output/data/EMC/model_comparison/R_A/Cu/ehijing-smash-decays-only.yoda",
+          "deuterium": "../../../../output/data/EMC/model_comparison/R_A/d/ehijing-smash-decays-only.yoda"
+        },
+        {
+          "nucleus": "Sn",
+          "nuclear": "../../../../output/data/EMC/model_comparison/R_A/Sn/ehijing-smash-decays-only.yoda",
+          "deuterium": "../../../../output/data/EMC/model_comparison/R_A/d/ehijing-smash-decays-only.yoda"
+        }
+      ]
+    },
+    {
+      "label": "eHIJING + SMASH (dec. and coll.)",
+      "linestyle": "-",
+      "color": "black",
+      "samples": [
+        {
+          "nucleus": "C",
+          "nuclear": "../../../../output/data/EMC/model_comparison/R_A/C/ehijing-smash-decays-collisions.yoda",
+          "deuterium": "../../../../output/data/EMC/model_comparison/R_A/d/ehijing-smash-decays-collisions.yoda"
+        },
+        {
+          "nucleus": "Cu",
+          "nuclear": "../../../../output/data/EMC/model_comparison/R_A/Cu/ehijing-smash-decays-collisions.yoda",
+          "deuterium": "../../../../output/data/EMC/model_comparison/R_A/d/ehijing-smash-decays-collisions.yoda"
+        },
+        {
+          "nucleus": "Sn",
+          "nuclear": "../../../../output/data/EMC/model_comparison/R_A/Sn/ehijing-smash-decays-collisions.yoda",
+          "deuterium": "../../../../output/data/EMC/model_comparison/R_A/d/ehijing-smash-decays-collisions.yoda"
+        }
+      ]
+    }
+  ]
+}

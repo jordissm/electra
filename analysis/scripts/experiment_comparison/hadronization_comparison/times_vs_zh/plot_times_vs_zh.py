@@ -5,6 +5,10 @@ import argparse
 import math
 from pathlib import Path
 import re
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+from plot_inputs import MissingDataError, optional_data, warn_skip
 
 SELECTION = "HERMES_2007_FIG2_ZH_CHARGED_TIMES_V1"
 BASE = "/HERMES_2007/zh"
@@ -70,14 +74,14 @@ def load_sample(path):
         production = profiles[f"{BASE}/production_time_charged"]
         formation = profiles[f"{BASE}/formation_time_charged"]
     except KeyError as error:
-        raise ValueError(
+        raise MissingDataError(
             f"{path}: missing {error.args[0]}; regenerate with the current utils/analyze_oscar_output.cpp"
         ) from error
     metadata = production["annotations"].copy()
     for profile in (production, formation):
         annotations = profile["annotations"]
         if annotations.get("TimeColumns", "complete") != "complete":
-            raise ValueError(
+            raise MissingDataError(
                 f"{path}: time profiles are unavailable or partial because input events lack named time/status columns"
             )
         if any(key not in annotations for key in PROFILE_KEYS):
@@ -140,9 +144,22 @@ def load_sample(path):
 def plot_samples(
     paths, labels, output_dir, filename="charged_hadron_times_vs_zh", title=""
 ):
-    if not paths or len(paths) != len(labels):
+    if len(paths) != len(labels):
         raise ValueError("Supply one label per input YODA file")
-    samples = [load_sample(path) for path in paths]
+    samples, available_labels = [], []
+    for path, label in zip(paths, labels):
+        sample = optional_data(load_sample, path)
+        if sample is None:
+            continue
+        if not any(row["count"] for row in sample[0]):
+            warn_skip(f"No populated time-profile bins in {path}")
+            continue
+        samples.append(sample)
+        available_labels.append(label)
+    if not samples:
+        warn_skip("No available data for hadronization-time figure")
+        return []
+    labels = available_labels
     reference = samples[0][1]
     for _, metadata in samples[1:]:
         for key in (*COMPARISON_KEYS, "zh_edges"):

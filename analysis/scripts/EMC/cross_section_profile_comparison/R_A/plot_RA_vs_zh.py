@@ -19,6 +19,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 ANALYSIS_DIR = SCRIPT_DIR.parents[3]
 sys.path.insert(0, str(SCRIPT_DIR.parents[1]))
 from emc1991 import load_ratio
+from plot_inputs import MissingDataError, available_file, optional_data, warn_skip
 
 NUCLEI = ("C", "Cu", "Sn")
 BEAM_MARKERS = {100: "o", 280: "s"}
@@ -35,6 +36,8 @@ PROFILE_STYLES = {
 def load_experiment(filename):
     if not filename.is_file():
         raise FileNotFoundError(f"Missing EMC data: {filename}. Supply the original EMC table as CSV; see analysis/scripts/README.md")
+    if filename.stat().st_size == 0:
+        raise MissingDataError(f"Empty EMC data: {filename}")
     points = {n: [] for n in NUCLEI}
     with filename.open(newline="") as stream:
         reader = csv.DictReader(line for line in stream if not line.startswith("#"))
@@ -67,8 +70,10 @@ def load_experiment(filename):
             points[nucleus].append((z, span, y, error, syst, beam))
     for nucleus, values in points.items():
         if not values:
-            raise ValueError(f"No EMC measurements supplied for {nucleus}")
+            warn_skip(f"No EMC measurements supplied for {nucleus}")
         values.sort(key=lambda p: (p[0], p[5] or 0))
+    if not any(points.values()):
+        raise MissingDataError(f"No EMC measurements supplied in {filename}")
     return points
 
 
@@ -104,7 +109,7 @@ def load_scenarios(filename):
                             "nuclear": str(nuclear.resolve()), "deuterium": str(deuterium.resolve())})
         entries = [{"samples": samples} for samples in groups.values()]
         if not entries:
-            raise ValueError(f"No matching nonempty EMC target/deuterium profiles in {directory}/{{100,280}}")
+            warn_skip(f"No matching nonempty EMC target/deuterium profiles in {directory}/{{100,280}}")
     if not isinstance(entries, list):
         raise ValueError("EMC config requires profile_directory or scenarios")
     scenarios = []
@@ -114,12 +119,11 @@ def load_scenarios(filename):
             if sample["nucleus"] not in NUCLEI:
                 raise ValueError("EMC scenario nucleus must be C, Cu or Sn")
             nuclear, deuterium = resolve(sample["nuclear"]), resolve(sample["deuterium"])
-            for path in (nuclear, deuterium):
-                if not path.is_file() or not path.stat().st_size:
-                    raise ValueError(f"Missing or empty EMC input: {path}")
+            if not available_file(nuclear) or not available_file(deuterium):
+                continue
             samples.append({"nucleus": sample["nucleus"], "nuclear": nuclear, "deuterium": deuterium})
         if not samples:
-            raise ValueError("Each EMC scenario needs at least one sample")
+            continue
         pid = samples[0]["nuclear"].stem.removeprefix("profile_")
         label, color, linestyle = PROFILE_STYLES.get(pid, (f"Scenario {i + 1}", f"C{i % 10}", "-"))
         scenarios.append({"samples": samples, "label": entry.get("label", label),
@@ -133,6 +137,7 @@ def create_figure(experiment, scenarios, args):
     has_boxes = False
     has_systematic = False
     beams = set()
+    plotted_scenarios = set()
     for column, nucleus in enumerate(NUCLEI):
         ax = axes[0, column]
         ax.set(xlim=args.xlim, ylim=args.ylim, title=nucleus, xlabel=r"$z_h$")
@@ -155,13 +160,15 @@ def create_figure(experiment, scenarios, args):
             for sample in scenario["samples"]:
                 if sample["nucleus"] != nucleus:
                     continue
-                beam, x, y, error = load_ratio(sample["nuclear"], sample["deuterium"])
+                values = optional_data(load_ratio, sample["nuclear"], sample["deuterium"])
+                if values is None or not values[1]:
+                    continue
+                beam, x, y, error = values
+                plotted_scenarios.add(scenario["label"])
                 if beam in seen_beams:
                     raise ValueError(f"Duplicate {beam} GeV {nucleus} sample in {scenario['label']}; beam/run merging requires explicit normalization")
                 seen_beams.add(beam)
                 beams.add(beam)
-                if not x:
-                    raise ValueError(f"No populated EMC ratios for {nucleus}, {beam} GeV")
                 if not args.no_errorbars:
                     ax.fill_between(x, [v - e for v, e in zip(y, error)], [v + e for v, e in zip(y, error)],
                                     color=scenario["color"], alpha=.08, linewidth=0, zorder=2)
@@ -181,6 +188,11 @@ def create_figure(experiment, scenarios, args):
             data_handle = ax.errorbar([z], [y], yerr=[error], fmt=BEAM_MARKERS.get(beam, "o"),
                                      linestyle="none", color="black", elinewidth=.45, capsize=1.2,
                                      capthick=.45, markersize=2.8, markeredgewidth=.45, zorder=10)
+    if data_handle is None and not plotted_scenarios:
+        warn_skip("No available data for EMC R_A figure")
+        plt.close(fig)
+        return None
+    scenarios = [s for s in scenarios if s["label"] in plotted_scenarios]
     handles = [Line2D([], [], color=s["color"], linestyle=s["linestyle"], linewidth=1.1) for s in scenarios]
     labels = [s["label"] for s in scenarios]
     if data_handle is not None:
@@ -207,13 +219,15 @@ def create_figure(experiment, scenarios, args):
     return fig
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--config", help="YAML/JSON profiles; omit to plot the supplied EMC measurements alone")
+def main(*, comparison="cross_section_profile_comparison", default_config=None, description=None):
+    parser = argparse.ArgumentParser(description=description or __doc__)
+    parser.add_argument("--config", default=default_config, help="YAML/JSON profile_directory or scenarios config; --data-only omits simulations")
     parser.add_argument("--data-file", type=Path, default=ANALYSIS_DIR / "experimental_data/EMC/R_A/Fig4.csv")
-    parser.add_argument("--output-dir", type=Path, default=ANALYSIS_DIR / "output/EMC/cross_section_profile_comparison/R_A")
+    parser.add_argument("--output-dir", type=Path, default=ANALYSIS_DIR / f"output/plots/EMC/{comparison}/R_A")
     parser.add_argument("--output-filename", default="RA_vs_zh.pdf")
-    parser.add_argument("--no-exp", action="store_true", help="Plot simulation alone; requires --config")
+    data_options = parser.add_mutually_exclusive_group()
+    data_options.add_argument("--no-exp", action="store_true", help="Plot simulation alone; requires --config")
+    data_options.add_argument("--data-only", action="store_true", help="Plot experimental data without simulation inputs")
     parser.add_argument("--no-errorbars", action="store_true", help="Disable simulation bands")
     parser.add_argument("--xlim", nargs=2, type=float, default=(.05, .85))
     parser.add_argument("--ylim", nargs=2, type=float, default=(.65, 1.35))
@@ -221,11 +235,13 @@ def main():
     parser.add_argument("--frame-linewidth", type=float, default=.3)
     parser.add_argument("--title", default="")
     args = parser.parse_args()
-    experiment = {} if args.no_exp else load_experiment(args.data_file)
-    scenarios = load_scenarios(args.config)
-    if args.no_exp and not scenarios:
-        parser.error("--no-exp requires --config with at least one simulation scenario")
+    experiment = {} if args.no_exp else (optional_data(load_experiment, args.data_file) or {})
+    scenarios = load_scenarios(None if args.data_only else args.config)
+    if args.no_exp and not args.config:
+        parser.error("--no-exp requires --config")
     fig = create_figure(experiment, scenarios, args)
+    if fig is None:
+        return
     args.output_dir.mkdir(parents=True, exist_ok=True)
     for extension in (".pdf", ".png"):
         path = args.output_dir / (Path(args.output_filename).stem + extension)

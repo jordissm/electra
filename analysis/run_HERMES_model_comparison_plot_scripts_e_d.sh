@@ -4,7 +4,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PLOT_SCRIPT_DIR="${SCRIPT_DIR}/scripts/HERMES/model_comparison/e_d"
 EXPERIMENTAL_DATA_DIR="${SCRIPT_DIR}/experimental_data"
-OUTPUT_DIR="${SCRIPT_DIR}/output/HERMES/model_comparison/e_d"
+DATA_DIR="${SCRIPT_DIR}/output/data/HERMES/model_comparison/R_A/d"
+OUTPUT_DIR="${SCRIPT_DIR}/output/plots/HERMES/model_comparison/R_A"
 PYTHON="${PYTHON:-python3}"
 FAILURES=0
 ZH_SCALING_FACTORS=(100 20 5 1)
@@ -18,10 +19,10 @@ run_plot() {
   shift 3
 
   if ! "${PYTHON}" "${PLOT_SCRIPT_DIR}/${script_name}" \
-    --ehijing-decays "${OUTPUT_DIR}/ehijing-decays.yoda" \
-    --smash-decays-only "${OUTPUT_DIR}/ehijing-smash-decays-only.yoda" \
-    --smash-decays-collisions "${OUTPUT_DIR}/ehijing-smash-decays-collisions.yoda" \
-    --hepdata-dir "${EXPERIMENTAL_DATA_DIR}/HERMES/e_d/${observable_dir}" \
+    --ehijing-decays "${DATA_DIR}/ehijing-decays.yoda" \
+    --smash-decays-only "${DATA_DIR}/ehijing-smash-decays-only.yoda" \
+    --smash-decays-collisions "${DATA_DIR}/ehijing-smash-decays-collisions.yoda" \
+    --hepdata-dir "${EXPERIMENTAL_DATA_DIR}/HERMES/R_A/d/${observable_dir}" \
     --output-dir "${OUTPUT_DIR}" \
     --output-filename "${output_filename}" \
     "$@"; then

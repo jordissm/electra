@@ -3,15 +3,15 @@
   "samples": [
     {
       "label": "CLAS",
-      "yoda": "../../../../output/CLAS/hadronization_comparison/times_vs_zh/multiplicities.yoda"
+      "yoda": "../../../../output/data/CLAS/times_vs_zh/multiplicities.yoda"
     },
     {
       "label": "HERMES",
-      "yoda": "../../../../output/HERMES/hadronization_comparison/times_vs_zh/multiplicities.yoda"
+      "yoda": "../../../../output/data/HERMES/times_vs_zh/multiplicities.yoda"
     },
     {
       "label": "EMC",
-      "yoda": "../../../../output/EMC/hadronization_comparison/times_vs_zh/multiplicities.yoda"
+      "yoda": "../../../../output/data/EMC/times_vs_zh/multiplicities.yoda"
     }
   ]
 }

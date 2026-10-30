@@ -12,6 +12,7 @@ from plot_RA_vs_zh import (
     load_yaml_config,
     scenario_defs_from_config,
 )
+from plot_inputs import warn_skip
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -43,6 +44,7 @@ def main():
                 "..",
                 "..",
                 "output",
+                "plots",
                 "HERMES",
                 "cross_section_profile_comparison",
                 "R_A",
@@ -117,6 +119,7 @@ def main():
         gridspec_kw={"wspace": 0.0},
     )
 
+    plotted_scenarios = set()
     for ip, (ax, particle) in enumerate(zip(axes, particles)):
         for spine in ax.spines.values():
             spine.set_linewidth(args.frame_linewidth)
@@ -159,9 +162,10 @@ def main():
         hist_path = full_hist_path(hist_base, hist_pattern, particle, args.raw)
         for scenario in scenarios:
             sim = load_sim_ra(scenario, nucleus, particle, hist_path)
-            if sim is None:
+            if sim is None or not sim[0]:
                 continue
             sx, sy, se = sim
+            plotted_scenarios.add(scenario["label"])
             if not args.no_errorbars:
                 ax.fill_between(
                     sx,
@@ -181,6 +185,11 @@ def main():
                 zorder=3,
             )
 
+    if not plotted_scenarios:
+        warn_skip("No available data for HP2026 poster")
+        plt.close(fig)
+        return
+
     scenario_handles = [
         Line2D(
             [0],
@@ -190,7 +199,7 @@ def main():
             linewidth=2.0,
             label=scenario["label"],
         )
-        for scenario in scenarios
+        for scenario in scenarios if scenario["label"] in plotted_scenarios
     ]
     axes[0].legend(
         handles=scenario_handles,

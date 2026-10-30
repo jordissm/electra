@@ -17,6 +17,7 @@ from matplotlib.ticker import AutoMinorLocator, MaxNLocator, MultipleLocator
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from clas2021 import load_ratio
+from plot_inputs import available_file, optional_data, warn_skip
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 ANALYSIS_DIR = SCRIPT_DIR.parents[3]
@@ -46,7 +47,9 @@ def load_experiment(filename):
             points[key].append((lo, hi, value, stat, syst))
     for key, values in points.items():
         values.sort()
-        if not values or any(a[1] > b[0] for a, b in zip(values, values[1:])):
+        if not values:
+            warn_skip(f"No CLAS measurements for {key} in {filename}")
+        if any(a[1] > b[0] for a, b in zip(values, values[1:])):
             raise ValueError(f"Missing or overlapping CLAS bins for {key}")
     return points
 
@@ -76,7 +79,7 @@ def load_scenarios(filename):
         paths = sorted((directory / "d").glob("profile_*.yoda"))
         paths = [p for p in paths if p.stat().st_size > 0]
         if not paths:
-            raise ValueError(f"No nonempty profile_*.yoda files in {directory / 'd'}; omit --config for data alone")
+            warn_skip(f"No nonempty profile_*.yoda files in {directory / 'd'}")
         entries = [{"deuterium": str(p.resolve()),
                     "nuclei": {n: str((directory / n / p.name).resolve()) for n in NUCLEI}} for p in paths]
     if not isinstance(entries, list):
@@ -86,23 +89,34 @@ def load_scenarios(filename):
         deuterium = resolve(entry["deuterium"])
         pid = deuterium.stem.removeprefix("profile_")
         label, color, linestyle = PROFILE_STYLES.get(pid, (deuterium.stem, f"C{i % 10}", "-"))
-        nuclei = {n: resolve(entry["nuclei"][n]) for n in NUCLEI}
-        for path in [deuterium, *nuclei.values()]:
-            if not path.is_file() or path.stat().st_size == 0:
-                raise ValueError(f"Missing or empty CLAS input: {path}")
+        if not available_file(deuterium):
+            continue
+        nuclei = {}
+        for nucleus in NUCLEI:
+            value = entry["nuclei"].get(nucleus)
+            if value is None:
+                warn_skip(f"Scenario {label} has no {nucleus} input")
+                continue
+            nuclear = resolve(value)
+            if available_file(nuclear):
+                nuclei[nucleus] = nuclear
+        if not nuclei:
+            continue
         scenarios.append({"deuterium": deuterium, "nuclei": nuclei,
                           "label": entry.get("label", label), "color": entry.get("color", color),
                           "linestyle": entry.get("linestyle", linestyle)})
     return scenarios
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--config", help="YAML/JSON profile_directory or scenarios config; omit for experimental data alone")
+def main(*, comparison="cross_section_profile_comparison", default_config=None, description=None):
+    parser = argparse.ArgumentParser(description=description or __doc__)
+    parser.add_argument("--config", default=default_config, help="YAML/JSON profile_directory or scenarios config; --data-only omits simulations")
     parser.add_argument("--data-dir", type=Path, default=ANALYSIS_DIR / "experimental_data/CLAS/R_A")
-    parser.add_argument("--output-dir", type=Path, default=ANALYSIS_DIR / "output/CLAS/cross_section_profile_comparison/R_A")
+    parser.add_argument("--output-dir", type=Path, default=ANALYSIS_DIR / f"output/plots/CLAS/{comparison}/R_A")
     parser.add_argument("--output-filename", default="RA_vs_zh.pdf", help="Both PDF and PNG are written using this stem")
-    parser.add_argument("--no-exp", action="store_true", help="Plot simulation only (requires --config)")
+    data_options = parser.add_mutually_exclusive_group()
+    data_options.add_argument("--no-exp", action="store_true", help="Plot simulation only (requires --config)")
+    data_options.add_argument("--data-only", action="store_true", help="Plot experimental data without simulation inputs")
     parser.add_argument("--no-errorbars", action="store_true", help="Disable simulation uncertainty bands")
     parser.add_argument("--xlim", nargs=2, type=float, default=(0.0, 1.05))
     parser.add_argument("--ylim", nargs=2, type=float, default=(0.0, 1.4))
@@ -112,14 +126,13 @@ def main():
     args = parser.parse_args()
     if args.no_exp and not args.config:
         parser.error("--no-exp requires --config")
-    scenarios = load_scenarios(args.config)
-    if args.no_exp and not scenarios:
-        parser.error("--no-exp requires at least one simulation scenario")
-    experiment = {} if args.no_exp else load_experiment(args.data_dir / "TableII.csv")
+    scenarios = load_scenarios(None if args.data_only else args.config)
+    experiment = {} if args.no_exp else (optional_data(load_experiment, args.data_dir / "TableII.csv") or {})
 
     fig, axes = plt.subplots(2, 3, squeeze=False, figsize=args.figsize,
                              gridspec_kw={"wspace": 0, "hspace": 0})
     data_handle = None
+    plotted_scenarios = set()
     for row, particle in enumerate(PARTICLES):
         for column, nucleus in enumerate(NUCLEI):
             ax = axes[row, column]
@@ -146,9 +159,13 @@ def main():
             else:
                 ax.tick_params(axis="y", which="both", left=False, labelleft=False)
             for scenario in scenarios:
-                x, y, error = load_ratio(scenario["nuclei"][nucleus], scenario["deuterium"], particle)
-                if not x:
-                    raise ValueError(f"No populated CLAS ratio bins for {scenario['label']}, {nucleus}, {particle}")
+                if nucleus not in scenario["nuclei"]:
+                    continue
+                values = optional_data(load_ratio, scenario["nuclei"][nucleus], scenario["deuterium"], particle)
+                if values is None or not values[0]:
+                    continue
+                x, y, error = values
+                plotted_scenarios.add(scenario["label"])
                 if not args.no_errorbars:
                     ax.fill_between(x, [v - e for v, e in zip(y, error)], [v + e for v, e in zip(y, error)],
                                     color=scenario["color"], alpha=.08, linewidth=0, zorder=2)
@@ -163,6 +180,11 @@ def main():
                             elinewidth=.45, capsize=1.2, capthick=.45, markersize=2.8,
                             markeredgewidth=.45, zorder=10)
 
+    if data_handle is None and not plotted_scenarios:
+        warn_skip("No available data for CLAS R_A figure")
+        plt.close(fig)
+        return
+    scenarios = [s for s in scenarios if s["label"] in plotted_scenarios]
     handles = [Line2D([], [], color=s["color"], linestyle=s["linestyle"], linewidth=1.1, label=s["label"])
                for s in scenarios]
     labels = [s["label"] for s in scenarios]

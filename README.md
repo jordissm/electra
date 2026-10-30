@@ -115,9 +115,11 @@ For HERMES cross-section profile comparisons, run
 `bash analysis/run_HERMES_cross_section_profile_comparison_plot_scripts_e_d.sh` or
 `bash analysis/run_HERMES_cross_section_profile_comparison_plot_scripts_R_A.sh`.
 These read `profile_XXXXXX.yoda` files under
-`analysis/output/HERMES/cross_section_profile_comparison/e_d/` and
-`analysis/output/HERMES/cross_section_profile_comparison/R_A/{d,He,Ne,Kr,Xe}/`,
-respectively. The R_A plots match each deuterium profile to the same filename
+`analysis/output/data/HERMES/cross_section_profile_comparison/R_A/d/` and
+`analysis/output/data/HERMES/cross_section_profile_comparison/R_A/{d,He,Ne,Kr,Xe}/`,
+respectively. Figures are saved under
+`analysis/output/plots/HERMES/cross_section_profile_comparison/R_A/`.
+The R_A plots match each deuterium profile to the same filename
 for each nucleus. Empty deuterium/e+d files are skipped with a warning.
 Legends show profile IDs; no formation time is inferred from an ID.
 The e+d Python scripts accept `--profile-files FILE [FILE ...]`, with
@@ -132,6 +134,13 @@ Run all experiment/comparison plotting workflows with
 or `--clas-data-only` to omit CLAS simulation overlays. The runner continues
 after failures and reports them at the end. Configuration options are described
 in the [plotting script guide](analysis/scripts/README.md).
+
+For CLAS or EMC model comparisons alone, run
+`bash analysis/run_CLAS_model_comparison_plot_scripts_R_A.sh` or
+`bash analysis/run_EMC_model_comparison_plot_scripts_R_A.sh`. Each uses its own
+config under `analysis/scripts/<EXPERIMENT>/model_comparison/R_A/`, reads inputs
+from `analysis/output/data/<EXPERIMENT>/model_comparison/R_A/`, and writes
+figures under `analysis/output/plots/<EXPERIMENT>/model_comparison/R_A/`.
 
 Plotting scripts are grouped by experiment under `analysis/scripts/HERMES/`
 and `analysis/scripts/CLAS/`; comparisons across experiments live under
