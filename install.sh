@@ -18,6 +18,7 @@ OUTPUT_DIR="$OUTPUT_DEFAULT"
 INPUT_DIR="$INPUT_DEFAULT"
 SLURM_SCRIPTS_DIR="$SLURM_SCRIPTS_DEFAULT"
 UTILS_DIR=""
+BUILD_ANALYSIS="1"
 
 SIF_DIR_DEFAULT="${SIF_DIR_DEFAULT:-/scratch/$USER/containers}"
 SIF_NAME_DEFAULT="electra.sif"
@@ -32,13 +33,14 @@ print_help() {
 USAGE: ./install.sh [OPTIONS]
 
 OPTIONS:
-  -p, --prefix <dir>        Where to write electra-shell (default: $PREFIX_DEFAULT)
+  -p, --prefix <dir>        Installation prefix (default: $PREFIX_DEFAULT)
   -i, --image <ref>         Container image ref (default: $CONTAINER_IMAGE_DOCKER_DEFAULT)
   -s, --sif <path>          Apptainer/Singularity SIF path (optional)
   -t, --tmpdir <dir>        TMPDIR for apptainer/singularity (default: $TMPDIR_OPT)
       --output <dir>        Default host output directory (default: $OUTPUT_DEFAULT)
       --input <dir>         Default host input directory (optional)
       --utils <dir>         Utility install directory (default: <prefix>/utils)
+      --skip-analysis-build Copy sources without building the host OSCAR analyzer
   (workdir is set at runtime via electra-shell --workdir; default /workspace)
   --pull-sif              Pull/build a local SIF file at install time (apptainer only)
   --sif-dir <dir>         Directory to store the SIF (default: /scratch/$USER/containers)
@@ -47,7 +49,12 @@ OPTIONS:
 
 What it creates:
   <prefix>/electra-shell
-  <prefix>/utils/ (or --utils directory; existing utility files are preserved)
+  <prefix>/utils/ (or --utils directory; existing sources are preserved)
+  <utils-directory>/analyze_oscar_output (built with host CMake and C++17)
+
+The analysis build privately installs yaml-cpp on first use. For offline builds,
+set ELECTRA_YAML_CPP_ARCHIVE to the official 0.8.0 archive or
+ELECTRA_YAML_CPP_PREFIX to an existing installation.
 
 Typical usage:
   ./install.sh
@@ -81,6 +88,25 @@ patch_slurm_scripts() {
       -e "s|^PROJECT_ROOT=.*$|PROJECT_ROOT=\"\${PROJECT_ROOT:-$PREFIX}\"|" \
       "$dir/smash_submit.sh"
   fi
+
+  if [[ -f "$dir/analysis_submit.sh" ]]; then
+    python3 - "$dir/analysis_submit.sh" "$PREFIX" "$UTILS_DIR/analyze_oscar_output" "$OUTPUT_DIR" <<'PY'
+from pathlib import Path
+import shlex
+import sys
+
+path = Path(sys.argv[1])
+defaults = {"PROJECT_ROOT": sys.argv[2], "ANALYZER": sys.argv[3], "OUTPUT_HOST": sys.argv[4]}
+patched = set()
+lines = path.read_text().splitlines(keepends=True)
+for index, line in enumerate(lines):
+    for key, value in defaults.items():
+        if key not in patched and line.startswith(key + "="):
+            lines[index] = key + "=${" + key + ":-" + shlex.quote(value) + "}\n"
+            patched.add(key)
+path.write_text("".join(lines))
+PY
+  fi
 }
 
 while [[ $# -gt 0 ]]; do
@@ -92,6 +118,7 @@ while [[ $# -gt 0 ]]; do
     --output)    OUTPUT_DIR="$(realpath_py "$2")"; shift 2;;
     --input)     INPUT_DIR="$(realpath_py "$2")"; shift 2;;
     --utils)     UTILS_DIR="$(realpath_py "$2")"; shift 2;;
+    --skip-analysis-build) BUILD_ANALYSIS="0"; shift 1;;
     --slurm-scripts) SLURM_SCRIPTS_DIR="$(realpath_py "$2")"; shift 2;;
     --pull-sif)  PULL_SIF="1"; shift 1;;
     --sif-dir)   SIF_DIR="$(realpath_py "$2")"; shift 2;;
@@ -196,6 +223,19 @@ elif command -v docker >/dev/null 2>&1; then
     /bin/bash -c 'if [[ -d /opt/electra/share/utils ]]; then cp -an /opt/electra/share/utils/. /workspace/utils/; else echo "WARNING: packaged utilities are unavailable in this image." >&2; fi'
 else
   echo "WARNING: could not copy utility files; no SIF or Docker source available."
+fi
+
+if [[ "$BUILD_ANALYSIS" == "1" ]]; then
+  if [[ ! -f "$UTILS_DIR/build_analysis.sh" ]]; then
+    echo "ERROR: analysis build script not found: $UTILS_DIR/build_analysis.sh" >&2
+    echo "Use an image containing the updated utilities, or deploy the complete utils directory." >&2
+    echo "To defer compilation, rerun install.sh with --skip-analysis-build." >&2
+    exit 1
+  fi
+  echo "Building the host OSCAR analyzer in: $UTILS_DIR"
+  bash "$UTILS_DIR/build_analysis.sh"
+else
+  echo "Skipped analysis build. Build later with: bash $UTILS_DIR/build_analysis.sh"
 fi
 
 if [[ "$ON_CLUSTER" == "1" ]]; then
@@ -361,4 +401,8 @@ echo "Launcher created at: $PREFIX/electra-shell"
 echo "Default output dir: $OUTPUT_DIR"
 echo "Default input dir:  $INPUT_DIR"
 echo "Utility directory:  $UTILS_DIR"
+if [[ "$BUILD_ANALYSIS" == "1" ]]; then
+  echo "OSCAR analyzer:     $UTILS_DIR/analyze_oscar_output"
+fi
+echo "Rebuild analysis:   bash $UTILS_DIR/build_analysis.sh"
 echo "Run: $PREFIX/electra-shell -- electra --help"

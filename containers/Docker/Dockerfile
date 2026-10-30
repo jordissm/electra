@@ -118,7 +118,7 @@ RUN --mount=type=cache,id=apt-cache-${TARGETPLATFORM},target=/var/cache/apt,shar
     libjpeg8-dev libllvm13 liblzma-dev libmpfr-dev libmpfrc++-dev libopenmpi-dev \
     libpcre3-dev libpcre++-dev libpng-dev libpng-tools libtbb-dev libssl-dev \
     libtool libx11-dev libxext-dev libxft-dev libxml2-dev libxpm-dev libxxhash-dev \
-    libyaml-cpp-dev libzstd-dev linux-libc-dev llvm-13 llvm-13-dev llvm-13-linker-tools llvm-13-runtime \
+    libzstd-dev linux-libc-dev llvm-13 llvm-13-dev llvm-13-linker-tools llvm-13-runtime \
     llvm-13-tools locales locales-all lsb-base lsb-release lzma python3-args \
     python3-atomicwrites python3-colorama python3-cryptography python3-dateutil \
     python3-decorator python3-dev python3-distro python3-distutils python3-entrypoints \

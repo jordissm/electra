@@ -14,15 +14,17 @@ the YAML is the sole source of analysis settings.
 
 ## Build and run
 
-YAML mode uses yaml-cpp. Install its development package, for example
-`libyaml-cpp-dev` on Ubuntu or `yaml-cpp` with Homebrew. The repository's Docker
-recipe includes the development package. Build from the repository root:
+YAML mode requires yaml-cpp. The build script downloads the official 0.8.0
+source archive, verifies its pinned SHA-256, and builds and installs a private
+static copy under `<build-directory>/deps/yaml-cpp-0.8.0/install`. Dependency
+sources are not bundled in the utility directory and are not taken from SMASH.
+With CMake and a C++17 compiler available, run this from the repository root,
+or rerun the same script in an installed utility directory:
 
 ```bash
-cmake -S utils -B build/analysis -DCMAKE_BUILD_TYPE=Release
-cmake --build build/analysis --parallel 2
+bash utils/build_analysis.sh --jobs 2
 
-build/analysis/analyze_oscar_output \
+utils/analyze_oscar_output \
   --analysis analysis/configs/hermes_2007_analysis_input.yaml \
   --meta /absolute/run/ehijing/DISKinematics.meta.jsonl \
   --file-list /absolute/run/ehijing/analysis/event_manifest.txt \
@@ -33,9 +35,72 @@ Packaged installations also ship the example YAML files under
 `<utils-directory>/analysis-configs/`. Their CMake source directory is that
 utility directory rather than the checkout's `utils/` directory.
 
-If CMake cannot find a custom yaml-cpp installation, set `CMAKE_PREFIX_PATH`
-to its prefix. The original direct C++ compilation command still builds the
-legacy mode. To enable YAML in a direct build with pkg-config:
+`install.sh` calls this build script automatically after copying the utilities,
+honoring `--prefix` and `--utils`. The executable is placed next to the script,
+with incremental CMake artifacts under `<utils-directory>/build/analysis`.
+Run `bash /absolute/path/to/utils/build_analysis.sh` after source/header changes;
+it works from any current directory and keeps the previous executable if a
+build fails. `--jobs N`, `--build-dir PATH`, and `--output PATH` customize the
+build. Without `--jobs`, parallelism uses `CMAKE_BUILD_PARALLEL_LEVEL` if set,
+otherwise `nproc`, then macOS's `sysctl -n hw.ncpu`, and finally a fallback of 2.
+Additional CMake configure arguments follow `--`, for example
+`bash utils/build_analysis.sh -- -DCMAKE_CXX_COMPILER=g++`.
+
+The installer accepts `--skip-analysis-build` to defer host compilation.
+On clusters, compile with tools compatible with the compute-node platform.
+The first build needs internet access; subsequent builds reuse verified cached
+sources and build the dependency incrementally. No administrator privileges
+are needed. Keep the build directory to retain that cache. The dependency's
+MIT license is installed under `share/licenses/yaml-cpp/LICENSE` in its private
+installation prefix.
+
+For offline builds, supply the official source archive:
+
+```bash
+bash utils/build_analysis.sh --yaml-cpp-archive /absolute/path/to/yaml-cpp-0.8.0.tar.gz
+```
+
+Or use an existing installation without downloading or building yaml-cpp:
+
+```bash
+bash utils/build_analysis.sh --yaml-cpp-prefix /absolute/path/to/yaml-cpp-install
+```
+
+The prefix should contain its CMake package in `lib/cmake/yaml-cpp`,
+`lib64/cmake/yaml-cpp`, or `share/cmake/yaml-cpp`. An explicitly selected shared
+library must be available on the execution host too. These options are mutually
+exclusive. `ELECTRA_YAML_CPP_ARCHIVE` and `ELECTRA_YAML_CPP_PREFIX` provide the
+same settings through the environment, including when `install.sh` invokes the
+build script automatically. A local archive must match the same pinned release
+checksum; it is not a mechanism for selecting an arbitrary dependency version.
+
+Direct CMake builds are also available if yaml-cpp is already installed:
+
+```bash
+cmake -S utils -B build/analysis -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_PREFIX_PATH=/absolute/path/to/yaml-cpp-install
+cmake --build build/analysis --parallel 2
+```
+
+That alternative places the binary in `build/analysis/` instead of next to the
+sources; set `ANALYZER` to that path when using the SLURM wrapper.
+
+Copy the complete utility directory, including its `cmake/` helper, when
+deploying its sources to a cluster. The default build links yaml-cpp statically,
+so the compute nodes do not need a yaml-cpp shared library. The former
+`ELECTRA_USE_SYSTEM_YAML_CPP` and `ELECTRA_YAML_CPP_SOURCE_DIR` options are no
+longer used; choose the build script's dependency options or CMake's package
+prefix instead.
+
+The analyzer is built and executed on the host by the installer and SLURM
+wrapper. Installing yaml-cpp only inside Docker does not satisfy that host
+build. A private host installation keeps these workflows independent of the
+physics image; container-only builds can instead use their own installed
+yaml-cpp package through the existing-prefix option.
+
+The original direct C++ compilation command still builds legacy mode.
+The following alternative direct build requires a separate installed yaml-cpp
+and pkg-config; use the build script above for automatic dependency installation:
 
 ```bash
 c++ -std=c++17 -O3 -Wall -Wextra -pedantic -DELECTRA_WITH_YAML \
@@ -48,13 +113,19 @@ acceptance defaults:
 
 ```bash
 bash slurm-scripts/analysis_submit.sh RUN_ID=6 \
-  ANALYZER="$PWD/build/analysis/analyze_oscar_output" \
+  ANALYZER="$PWD/utils/analyze_oscar_output" \
   ANALYSIS_INPUT="$PWD/analysis/configs/hermes_2007_analysis_input.yaml"
 ```
 
 The YAML path is converted to an absolute path before submission and must be
-readable from the compute node. The executable and yaml-cpp runtime must also
-be available there. The wrapper executes the analyzer directly on the host.
+readable from the compute node. The executable must also be available there;
+an explicitly selected system shared yaml-cpp needs its runtime there too.
+The wrapper executes the analyzer directly on the host.
+The checkout default is `<project-root>/utils/analyze_oscar_output`. During
+cluster installation, the installer captures the actual installed utility path
+in the copied analysis submit script, including custom `--utils` locations.
+It also captures the installer-selected `--output` directory for run discovery.
+An explicit `ANALYZER` environment variable or submission argument overrides it.
 
 ## Define a new figure
 
@@ -305,9 +376,13 @@ The HERMES 2007 configuration supplies the existing Fig. 2 `zh`, `nu`, and `Q2`
 edges, the distribution-specific `nu` and `zh` selections, and examples of
 custom three-dimensional bins and profiles. It applies the table's explicit
 `xB` and upper-`nu` bounds, unlike the historical hard-coded event selection.
-It excludes neutral pions as requested. The other configurations and custom
-HERMES histograms use illustrative research binning, which should be replaced
-when comparing a particular published table.
+It excludes neutral pions as requested. The CLAS configuration additionally
+defines `zh_Q2_nu` with the exact z, Q2, and nu edges of Tables III–VIII in
+[arXiv:2109.09951v2](https://arxiv.org/abs/2109.09951v2). This supplies the
+slice histograms needed by the [CLAS Fig. 2/3 plotting script](../../analysis/scripts/README.md).
+Its existing inclusive histograms, the other experiment configurations, and
+custom HERMES histograms use illustrative research binning, which should be
+replaced when comparing a particular published table.
 
 EMC energies are kept separate. Reproducing the published combinations needs
 the corresponding sample weights or luminosity information; arbitrary generated
@@ -317,7 +392,7 @@ simulated samples and preserve the event weights appropriate to those samples.
 
 ## Validation
 
-From the repository root, with a C++17 compiler, yaml-cpp and pkg-config:
+From the repository root, with CMake and a C++17 compiler:
 
 ```bash
 python3 -m unittest discover -s utils/tests

@@ -32,6 +32,8 @@ electra.code-workspace
 # Build files
 electra-shell
 build/**
+/utils/build/
+/utils/analyze_oscar_output
 
 # ========================
 modified_files/
@@ -57,19 +59,29 @@ AGENTS.md
 !/analysis/scripts/
 /analysis/scripts/**
 !/analysis/scripts/**/
-!/analysis/scripts/hermes2007.py
-!/analysis/scripts/plot_hermes_fig2.py
-!/analysis/scripts/model_comparison/R_A/plot_RA_vs_zh.py
-!/analysis/scripts/model_comparison/R_A/RA_vs_zh_inputs.yaml
-!/analysis/scripts/cross_section_profile_comparison/R_A/plot_RA_vs_zh.py
-!/analysis/scripts/cross_section_profile_comparison/R_A/RA_vs_zh_inputs.yaml
-!/analysis/scripts/cross_section_profile_comparison/R_A/plot_HP2026_poster.py
-!/analysis/scripts/hadronization_comparison/times_vs_zh/*.py
-!/analysis/scripts/hadronization_comparison/times_vs_zh/times_vs_zh_inputs.example.json
+!/analysis/scripts/**/*.py
+!/analysis/scripts/**/*.yaml
+!/analysis/scripts/**/*.example.json
+!/analysis/scripts/README.md
 !/analysis/run_HERMES_plot_scripts.sh
+!/analysis/run_all_plot_scripts.sh
 !/analysis/run_HERMES_model_comparison_plot_scripts_R_A.sh
+!/analysis/run_HERMES_model_comparison_plot_scripts_e_d.sh
 !/analysis/run_HERMES_cross_section_profile_comparison_plot_scripts_R_A.sh
+!/analysis/run_HERMES_cross_section_profile_comparison_plot_scripts_e_d.sh
 !/analysis/run_hadronization_comparison_times_vs_zh.sh
+!/analysis/run_CLAS_cross_section_profile_comparison_plot_scripts_R_A.sh
+!/analysis/run_EMC_cross_section_profile_comparison_plot_scripts_R_A.sh
+!/analysis/experimental_data/
+/analysis/experimental_data/**
+!/analysis/experimental_data/CLAS/
+!/analysis/experimental_data/CLAS/R_A/
+!/analysis/experimental_data/CLAS/R_A/TableII.csv
+!/analysis/experimental_data/CLAS/R_A/TablesIII_VIII.csv
+!/analysis/experimental_data/EMC/
+!/analysis/experimental_data/EMC/R_A/
+!/analysis/experimental_data/EMC/R_A/Fig4.csv
+!/analysis/experimental_data/EMC/R_A/Fig4.example.csv
 
 # ========================
 # Development directory

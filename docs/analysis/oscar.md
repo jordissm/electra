@@ -8,7 +8,7 @@ run. It does not require Rivet, ROOT, or the
 simulation libraries.
 
 For configurable cuts, species, multidimensional bins, and mean-value profiles,
-use the [YAML analysis mode](yaml-oscar.md). Build that mode with yaml-cpp and
+use the [YAML analysis mode](yaml-oscar.md). The build script installs yaml-cpp privately; then
 pass `--analysis analysis/configs/hermes_2007_analysis_input.yaml`, or your own
 configuration. The remainder of this page describes the legacy mode without
 `--analysis` and its input conventions shared by both modes.
@@ -20,18 +20,19 @@ and [Rivet analysis](rivet.md) for the separate Rivet workflow.
 
 ## Build the analyzer
 
-From the ELECTRA repository root, with a C++17 compiler:
+The installer builds the analyzer automatically. From a checkout, or after
+editing sources, rebuild with CMake and a host C++17 compiler:
 
 ```bash
-mkdir -p build/analysis
-c++ -std=c++17 -O3 -Wall -Wextra -pedantic \
-  utils/analyze_oscar_output.cpp \
-  -o build/analysis/analyze_oscar_output
-build/analysis/analyze_oscar_output --help
+bash utils/build_analysis.sh --jobs 2
+utils/analyze_oscar_output --help
 ```
 
 On a cluster, compile for the compute-node platform and keep the executable on
 a filesystem accessible to the analysis job. The analyzer runs serially.
+For an installation with a custom utility directory, run its
+`build_analysis.sh` by absolute path. Sources are found relative to the script,
+and the resulting executable is placed in that same utility directory.
 
 ## Prepare the inputs
 
@@ -39,7 +40,7 @@ Set an absolute parent run path, containing both `ehijing/` and `smash/`:
 
 ```bash
 export RUN_DIR=/absolute/path/to/output/runs/6
-export ANALYZER="$PWD/build/analysis/analyze_oscar_output"
+export ANALYZER="$PWD/utils/analyze_oscar_output"
 ```
 
 ### DIS metadata
@@ -209,8 +210,9 @@ bash slurm-scripts/analysis_submit.sh RUN_ID=6 RUN_DIR="$RUN_DIR" \
 ```
 
 By default, the wrapper looks for the executable at
-`<project-root>/analyze_oscar_output`; `ANALYZER` above selects the build from
-this guide. Configure account, partition, resources and paths through
+`<project-root>/utils/analyze_oscar_output`. The installer sets the copied
+submit script's default to the actual utility directory, including `--utils`
+overrides; `ANALYZER` can select another binary. Configure account, partition, resources and paths through
 `slurm-scripts/cluster.env` or `key=value` arguments. See the
 [SLURM guide](../running/slurm.md) for cluster setup.
 
@@ -329,13 +331,13 @@ Recompile the analyzer and regenerate each target/scenario's YODA file. Old
 files lack the required raw counts, DIS denominators, and selection metadata;
 the updated ratio scripts reject them rather than reusing inclusive spectra.
 The model-comparison input paths are configured in
-`analysis/scripts/model_comparison/R_A/RA_vs_zh_inputs.yaml`.
+`analysis/scripts/HERMES/model_comparison/R_A/RA_vs_zh_inputs.yaml`.
 
 From the repository root, with Matplotlib installed:
 
 ```bash
-python3 analysis/scripts/plot_hermes_fig2.py \
-  --config analysis/scripts/model_comparison/R_A/RA_vs_zh_inputs.yaml \
+python3 analysis/scripts/HERMES/plot_hermes_fig2.py \
+  --config analysis/scripts/HERMES/model_comparison/R_A/RA_vs_zh_inputs.yaml \
   --output-dir /path/to/plots
 ```
 

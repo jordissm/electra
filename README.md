@@ -73,7 +73,15 @@ curl -fsSL https://raw.githubusercontent.com/jordissm/electra/main/install.sh -o
 
 The installer copies packaged utilities into `<prefix>/utils` on both local and
 cluster installs. Use `--utils <dir>` to choose another directory. Re-running
-the installer adds missing files and preserves existing utility files.
+the installer adds missing files and preserves existing utility sources.
+It also builds the host OSCAR analyzer at `<utils-directory>/analyze_oscar_output`
+using CMake and a C++17 compiler. The build script downloads, verifies, and
+privately installs yaml-cpp once, then reuses the cached dependency. After editing its sources,
+rerun `bash <utils-directory>/build_analysis.sh`; the script locates its sources
+independently of the current directory. Use `--skip-analysis-build` on the
+installer to defer compilation until the host build tools are available.
+For offline installation, set `ELECTRA_YAML_CPP_ARCHIVE` to the official 0.8.0
+archive or `ELECTRA_YAML_CPP_PREFIX` to an existing yaml-cpp installation.
 
 `--seed` (or SLURM `SEED`) is an unsigned 64-bit ELECTRA master seed in
 `[0, 18446744073709551615]`; zero is reproducible. Defaults are `12345` for
@@ -97,8 +105,8 @@ For fragmentation plots, see the [spacetime diagram guide](docs/analysis/fragmen
 For identified-hadron spectra before and after transport, see the
 [OSCAR analysis guide](docs/analysis/oscar.md).
 For configurable event/hadron cuts, species, multidimensional histograms and
-profiles, build with `cmake -S utils -B build/analysis` and
-`cmake --build build/analysis`, then pass `--analysis FILE.yaml` to the analyzer.
+profiles, build with `bash utils/build_analysis.sh`, then pass
+`--analysis FILE.yaml` to `utils/analyze_oscar_output`.
 Start with `analysis/configs/hermes_2007_analysis_input.yaml` or the CLAS,
 HERMES 2011/2012 and EMC configurations. See the
 [YAML analysis guide](docs/analysis/yaml-oscar.md) for the schema and SLURM usage.
@@ -115,9 +123,33 @@ Legends show profile IDs; no formation time is inferred from an ID.
 The e+d Python scripts accept `--profile-files FILE [FILE ...]`, with
 `--tau-files` retained as an alias for older callers. To select R_A profiles
 or customize their labels, replace `profile_directory` in
-`analysis/scripts/cross_section_profile_comparison/R_A/RA_vs_zh_inputs.yaml` with an
+`analysis/scripts/HERMES/cross_section_profile_comparison/R_A/RA_vs_zh_inputs.yaml` with an
 explicit `scenarios` list containing `label`, `deuterium`, and `nuclei`
 entries, as used by the model-comparison configuration.
+
+Run all experiment/comparison plotting workflows with
+`bash analysis/run_all_plot_scripts.sh`. Add `--dry-run` to inspect the commands
+or `--clas-data-only` to omit CLAS simulation overlays. The runner continues
+after failures and reports them at the end. Configuration options are described
+in the [plotting script guide](analysis/scripts/README.md).
+
+Plotting scripts are grouped by experiment under `analysis/scripts/HERMES/`
+and `analysis/scripts/CLAS/`; comparisons across experiments live under
+`analysis/scripts/experiment_comparison/`. See the
+[plotting script guide](analysis/scripts/README.md) for the directory map.
+For the CLAS charged-pion ratios in Fig. 1 of arXiv:2109.09951, run
+`bash analysis/run_CLAS_cross_section_profile_comparison_plot_scripts_R_A.sh`.
+This plots the published Table II data with the HERMES panel/error-box style;
+the same launcher also writes separate pi+ and pi- figures binned in Q2 and nu
+for Figs. 2–3 using Tables III–VIII. Pass `--config` to overlay CLAS
+cross-section profiles as described in the guide.
+
+The EMC charged-hadron comparison (EMC Fig. 4 / eHIJING Fig. 18) is available
+through `analysis/run_EMC_cross_section_profile_comparison_plot_scripts_R_A.sh`
+and is included in the all-plots runner. It awaits the original experimental
+table in `analysis/experimental_data/EMC/R_A/Fig4.csv`; the plotting guide
+documents its CSV schema and optional simulation inputs. EMC scripts live
+under `analysis/scripts/EMC/`.
 
 For pooled charged-hadron mean production and formation times versus `z_h`,
 run the C++ `utils/analyze_oscar_output.cpp` analyzer on the data host, directly

@@ -1,0 +1,66 @@
+cmake_minimum_required(VERSION 3.16)
+
+# Only the build cache is populated; no dependency sources live in the checkout.
+set(YAML_CPP_VERSION "0.8.0")
+set(YAML_CPP_SHA256 "fbe74bbdcee21d656715688706da3c8becfd946d92cd44705cc6098bb23b3a16")
+set(YAML_CPP_URL "https://github.com/jbeder/yaml-cpp/archive/refs/tags/${YAML_CPP_VERSION}.tar.gz")
+if(NOT ELECTRA_YAML_CPP_DEP_DIR)
+  message(FATAL_ERROR "ELECTRA_YAML_CPP_DEP_DIR is required")
+endif()
+
+set(source "${ELECTRA_YAML_CPP_DEP_DIR}/source/yaml-cpp-${YAML_CPP_VERSION}")
+set(stamp "${ELECTRA_YAML_CPP_DEP_DIR}/verified-source.sha256")
+if(EXISTS "${stamp}" AND EXISTS "${source}/CMakeLists.txt" AND NOT ELECTRA_YAML_CPP_ARCHIVE)
+  file(READ "${stamp}" verified)
+  if(verified STREQUAL YAML_CPP_SHA256)
+    return()
+  endif()
+endif()
+
+if(ELECTRA_YAML_CPP_ARCHIVE)
+  get_filename_component(archive "${ELECTRA_YAML_CPP_ARCHIVE}" ABSOLUTE)
+  if(NOT EXISTS "${archive}")
+    message(FATAL_ERROR "Local yaml-cpp archive does not exist: ${archive}")
+  endif()
+else()
+  file(MAKE_DIRECTORY "${ELECTRA_YAML_CPP_DEP_DIR}/downloads")
+  set(archive "${ELECTRA_YAML_CPP_DEP_DIR}/downloads/yaml-cpp-${YAML_CPP_VERSION}.tar.gz")
+  if(NOT EXISTS "${archive}")
+    message(STATUS "Downloading yaml-cpp ${YAML_CPP_VERSION}")
+    file(DOWNLOAD "${YAML_CPP_URL}" "${archive}.part"
+         TLS_VERIFY ON TIMEOUT 120 INACTIVITY_TIMEOUT 30 STATUS status)
+    list(GET status 0 code)
+    if(NOT code EQUAL 0)
+      list(GET status 1 reason)
+      message(FATAL_ERROR
+        "Cannot download yaml-cpp: ${reason}. For an offline build, use "
+        "--yaml-cpp-archive PATH or --yaml-cpp-prefix PATH (also available as "
+        "ELECTRA_YAML_CPP_ARCHIVE / ELECTRA_YAML_CPP_PREFIX during installation).")
+    endif()
+    # Do not promote a partial or unexpected download into the cache.
+    file(SHA256 "${archive}.part" actual)
+    if(NOT actual STREQUAL YAML_CPP_SHA256)
+      message(FATAL_ERROR "yaml-cpp download SHA-256 mismatch; expected ${YAML_CPP_SHA256}, got ${actual}")
+    endif()
+    file(RENAME "${archive}.part" "${archive}")
+  endif()
+endif()
+
+file(SHA256 "${archive}" actual)
+if(NOT actual STREQUAL YAML_CPP_SHA256)
+  message(FATAL_ERROR "yaml-cpp archive SHA-256 mismatch; expected ${YAML_CPP_SHA256}, got ${actual}")
+endif()
+if(EXISTS "${stamp}" AND EXISTS "${source}/CMakeLists.txt")
+  file(READ "${stamp}" verified)
+  if(verified STREQUAL YAML_CPP_SHA256)
+    return()
+  endif()
+endif()
+file(MAKE_DIRECTORY "${ELECTRA_YAML_CPP_DEP_DIR}/source")
+execute_process(COMMAND "${CMAKE_COMMAND}" -E tar xzf "${archive}"
+                WORKING_DIRECTORY "${ELECTRA_YAML_CPP_DEP_DIR}/source"
+                RESULT_VARIABLE result)
+if(NOT result EQUAL 0 OR NOT EXISTS "${source}/CMakeLists.txt")
+  message(FATAL_ERROR "Could not extract yaml-cpp archive: ${archive}")
+endif()
+file(WRITE "${stamp}" "${YAML_CPP_SHA256}")

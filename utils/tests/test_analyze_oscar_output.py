@@ -12,7 +12,7 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "analysis/scripts"))
+sys.path.insert(0, str(ROOT / "analysis/scripts/HERMES"))
 from hermes2007 import load_ratio, spectrum
 # Independent reference from HEPData 10.17182/hepdata.13387.v1, Tables 4, 1, 8.
 REFERENCE_EDGES = {
@@ -284,7 +284,7 @@ class OscarAnalysisTest(unittest.TestCase):
             "deuterium": str(self.output), "nuclei": {"He": str(self.output)}}]}))
         env = dict(os.environ, MPLBACKEND="Agg", MPLCONFIGDIR=str(self.run_dir / "mpl"),
                    XDG_CACHE_HOME=str(self.run_dir / "cache"))
-        result = subprocess.run([sys.executable, str(ROOT / "analysis/scripts/plot_hermes_fig2.py"),
+        result = subprocess.run([sys.executable, str(ROOT / "analysis/scripts/HERMES/plot_hermes_fig2.py"),
             "--config", str(config), "--particles", "pip", "--no-exp",
             "--output-dir", str(self.run_dir / "plots")], env=env, text=True, capture_output=True)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)

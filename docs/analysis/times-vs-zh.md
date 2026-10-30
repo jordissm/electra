@@ -3,7 +3,7 @@
 Event processing lives in `utils/analyze_oscar_output.cpp`. Every run reads
 OSCAR and DIS metadata once and writes all multiplicity histograms and native
 YODA time profiles together in the same file. The scripts under
-`analysis/scripts/hadronization_comparison/times_vs_zh/` only read those
+`analysis/scripts/experiment_comparison/hadronization_comparison/times_vs_zh/` only read those
 YODA files and plot. No OSCAR files, DIS metadata, CSVs, or JSON sidecars are
 needed on the plotting machine.
 
@@ -157,14 +157,14 @@ repository root:
 
 ```bash
 bash analysis/run_hadronization_comparison_times_vs_zh.sh \
-  --config analysis/scripts/hadronization_comparison/times_vs_zh/times_vs_zh_inputs.example.json \
+  --config analysis/scripts/experiment_comparison/hadronization_comparison/times_vs_zh/times_vs_zh_inputs.example.json \
   --output-dir analysis/output/hadronization_comparison/times_vs_zh/plots
 ```
 
 Or pass files and labels directly:
 
 ```bash
-python3 analysis/scripts/hadronization_comparison/times_vs_zh/plot_times_vs_zh.py \
+python3 analysis/scripts/experiment_comparison/hadronization_comparison/times_vs_zh/plot_times_vs_zh.py \
   --inputs analysis/output/HERMES/hadronization_comparison/times_vs_zh/ehijing-decays.yoda \
            analysis/output/EMC/hadronization_comparison/times_vs_zh/ehijing-decays.yoda \
            analysis/output/CLAS/hadronization_comparison/times_vs_zh/ehijing-decays.yoda \

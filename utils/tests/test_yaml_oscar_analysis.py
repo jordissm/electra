@@ -4,7 +4,7 @@ import json
 import math
 import os
 from pathlib import Path
-import shlex
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -41,12 +41,22 @@ class YamlOscarAnalysisTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.build = tempfile.TemporaryDirectory(prefix="electra-yaml-tests-")
-        cls.executable = Path(cls.build.name) / "analyze_oscar_output"
-        flags = shlex.split(subprocess.check_output(
-            ["pkg-config", "--cflags", "--libs", "yaml-cpp"], text=True))
-        subprocess.run(["c++", "-std=c++17", "-O2", "-Wall", "-Wextra", "-pedantic",
-                        "-DELECTRA_WITH_YAML", str(ROOT / "utils/analyze_oscar_output.cpp"),
-                        "-o", str(cls.executable), *flags], check=True, capture_output=True, text=True)
+        cls.addClassCleanup(cls.build.cleanup)
+        # Model a standalone deployment: there is no sibling src/smash checkout.
+        source = Path(cls.build.name) / "installed utils"
+        source.mkdir()
+        for filename in ("CMakeLists.txt", "analyze_oscar_output.cpp", "oscar_analysis.hpp", "build_analysis.sh"):
+            shutil.copy2(ROOT / "utils" / filename, source / filename)
+        shutil.copytree(ROOT / "utils/cmake", source / "cmake")
+        cls.source = source
+        cls.executable = source / "analyze_oscar_output"
+        cls.dependency_args = []
+        if os.environ.get("ELECTRA_YAML_CPP_ARCHIVE"):
+            cls.dependency_args = ["--yaml-cpp-archive", os.environ["ELECTRA_YAML_CPP_ARCHIVE"]]
+        elif os.environ.get("ELECTRA_YAML_CPP_PREFIX"):
+            cls.dependency_args = ["--yaml-cpp-prefix", os.environ["ELECTRA_YAML_CPP_PREFIX"]]
+        subprocess.run(["bash", str(source / "build_analysis.sh"), "--jobs", "2", *cls.dependency_args],
+                       check=True, capture_output=True, text=True)
 
     @classmethod
     def tearDownClass(cls):
@@ -213,6 +223,50 @@ class YamlOscarAnalysisTest(unittest.TestCase):
         for path in sorted((ROOT / "analysis/configs").glob("*_analysis_input.yaml")):
             with self.subTest(path=path.name):
                 self.assertTrue(self.run_analysis(config_path=path))
+
+    def test_rebuild_script_picks_up_source_changes(self):
+        source = self.source / "analyze_oscar_output.cpp"
+        source.write_text(source.read_text().replace("YAML-defined analysis", "Rebuilt YAML-defined analysis", 1))
+        # Older make versions compare whole seconds. Model an edit after the
+        # previous compile without a timing-dependent sleep in this test.
+        for compiled in (self.source / "build/analysis").rglob("analyze_oscar_output.cpp.o"):
+            previous = compiled.stat()
+            os.utime(compiled, (previous.st_atime, previous.st_mtime - 2))
+        subprocess.run(["bash", str(self.source / "build_analysis.sh"), "--jobs", "2", *self.dependency_args],
+                       cwd=self.root, check=True, capture_output=True, text=True)
+        help_result = subprocess.run([str(self.executable), "--help"], capture_output=True, text=True, check=True)
+        self.assertIn("Rebuilt YAML-defined analysis", help_result.stderr)
+
+    def test_cached_dependency_rebuild_works_without_archive(self):
+        if self.dependency_args and self.dependency_args[0] == "--yaml-cpp-prefix":
+            self.skipTest("Explicit existing-prefix mode does not populate a source cache")
+        env = {key: value for key, value in os.environ.items()
+               if key not in ("ELECTRA_YAML_CPP_ARCHIVE", "ELECTRA_YAML_CPP_PREFIX")}
+        result = subprocess.run(["bash", str(self.source / "build_analysis.sh"), "--jobs", "2"],
+                                cwd=self.root, env=env, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertNotIn("Downloading yaml-cpp", result.stdout)
+
+    def test_clas_published_slices_keep_separate_dis_denominators(self):
+        events = []
+        for nu in (2.8, 3.4, 3.9):
+            for q2 in (1.1, 1.5, 2.5):
+                metadata = {"Q2": q2, "y": nu / 5.014,
+                            "q4": [0, 0, math.sqrt(nu**2 + q2), nu]}
+                events.extend([(nu, [.25], metadata), (nu, [], metadata)])
+        events.append((4.23, [.25]))  # Inside the global nu cut, outside all published nu slices.
+        self.fixture(events)
+        hist = self.run_analysis(config_path=ROOT / "analysis/configs/clas_2021_analysis_input.yaml")
+        for iq in range(3):
+            for inu in range(3):
+                base = f"/CLAS_2021/zh_Q2_nu/Q2_bin{iq}/nu_bin{inu}"
+                dis = hist[base + "/DIS"]["bins"]
+                self.assertEqual([bin_[2] for bin_ in dis], [2] * 10)
+                counts = hist[base + "/counts_pip"]["bins"]
+                self.assertEqual(sum(bin_[2] for bin_ in counts), 1)
+                multiplicity = hist[base + "/multiplicity_pip"]["bins"][2]
+                self.assertAlmostEqual(multiplicity[2], 5)
+                self.assertAlmostEqual(multiplicity[3], 25)
 
     def test_hermes_counts_match_legacy_on_common_phase_space(self):
         self.fixture([(5, [0.6]), (7, [0.3, 0.4, 0.8]), (10, []), (18, [0.2, 0.5])])
