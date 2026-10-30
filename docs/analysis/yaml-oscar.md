@@ -379,7 +379,7 @@ custom three-dimensional bins and profiles. It applies the table's explicit
 It excludes neutral pions as requested. The CLAS configuration additionally
 defines `zh_Q2_nu` with the exact z, Q2, and nu edges of Tables III–VIII in
 [arXiv:2109.09951v2](https://arxiv.org/abs/2109.09951v2). This supplies the
-slice histograms needed by the [CLAS Fig. 2/3 plotting script](../../analysis/scripts/README.md).
+slice histograms needed by the [CLAS Fig. 2/3 plotting script](https://github.com/jordissm/electra/blob/main/analysis/scripts/README.md).
 Its existing inclusive histograms, the other experiment configurations, and
 custom HERMES histograms use illustrative research binning, which should be
 replaced when comparing a particular published table.
