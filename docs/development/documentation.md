@@ -41,6 +41,10 @@ CI uses `docs/ehijing-revision.txt` to check out the latest commit on eHIJING's
 The published component documentation therefore describes that checkout;
 when using a different executable revision, consult its accompanying documentation.
 
+The nuclear database notes are maintained directly in `docs/nucleus-database.md`
+and link to the YAML under `input/ehijing/`. Keep project Markdown guides in
+`docs/` so Sphinx can resolve their links and include them in navigation.
+
 The CLI help is generated from the actual argument parser. Python API entries
 come from docstrings; C++ API entries come from Doxygen comments.
 

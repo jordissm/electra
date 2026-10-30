@@ -111,7 +111,7 @@ nucleus entries for the CLAS, EMC and HERMES comparisons, including deuterium
 `nucleon_width_fm`, alongside A, Z and its distribution parameters.
 Deuterium uses Hulthén sampling; the other entries use Woods–Saxon sampling.
 
-The companion [database notes](../input/ehijing/woods_saxon.md) describe the
+The companion [database notes](nucleus-database.md) describe the
 fields, units, source references, estimates, isotope choices and local/SLURM
 usage. Select an entry with `--nucleus C12` on `ehijing` or
 `electra ehijing run`; the executable loads its A, Z and geometry parameters.

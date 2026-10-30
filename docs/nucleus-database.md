@@ -1,6 +1,6 @@
 # Nuclear geometry database
 
-[`woods_saxon.yaml`](woods_saxon.yaml) contains only nucleus entries under
+[`woods_saxon.yaml`](../input/ehijing/woods_saxon.yaml) contains only nucleus entries under
 `nuclei`. It covers target options for CLAS, EMC and HERMES, their deuterium
 baseline (`d`), and additional Au-197 and U-238 entries.
 
@@ -34,7 +34,7 @@ Coordinates and lengths supplied in fm are converted to GeV^-1 internally.
 The current implementation has no deformations, minimum-distance correlations
 or recentering for Woods–Saxon entries. The estimates have not been fitted or
 deconvolved for the Gaussian nucleon profile. See the
-[unit conventions](../../src/ehijing/docs/units.md).
+[unit conventions](_generated/units.md).
 
 ## Deuterium
 
@@ -52,7 +52,7 @@ half-separations about their centre of mass. No Woods–Saxon radius or
 diffuseness applies.
 
 These values are loaded from the selected YAML entry into
-[`NuclearTarget.h`](../../src/ehijing/external/pythia8/include/eHIJING/NuclearTarget.h).
+[`NuclearTarget.h`](../src/ehijing/external/pythia8/include/eHIJING/NuclearTarget.h).
 For comparison, the pinned TRENTo implementation samples the radius of one
 nucleon about the centre of mass and uses inverse lengths `0.457` and `2.35`
 fm^-1. Dividing those by two gives separation-convention parameters `0.2285`
@@ -64,7 +64,7 @@ The comparison groups are CLAS: C, Fe, Pb; EMC: C, Cu, Sn; and HERMES:
 He, Ne, Kr, Xe. Deuterium is the reference target. Integer masses represent
 single targets, not natural-isotope mixtures. Choose the intended mass
 explicitly, for example `NUCLEUS=Xe129` in
-[`slurm-scripts/ehijing_submit.sh`](../../slurm-scripts/ehijing_submit.sh).
+[`slurm-scripts/ehijing_submit.sh`](../slurm-scripts/ehijing_submit.sh).
 The representative EMC choices Cu-64 and Sn-119 remain provisional.
 
 | YAML key | Target | Status | Parameter origin |
@@ -171,7 +171,7 @@ selected file read-only into the container. `NUCLEON_WIDTH_FM`,
 `NUCLEAR_RADIUS_FM` and `NUCLEAR_SURFACE_FM` optionally override the YAML values;
 omit the last two for deuterium. `NUCLEAR_TARGET=on|off` controls the runtime
 switch independently. See the
-[configuration guide](../../docs/configuration.md).
+[configuration guide](configuration.md).
 
 ## Build and installation
 

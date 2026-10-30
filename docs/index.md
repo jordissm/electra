@@ -17,6 +17,7 @@ getting-started
 running/local
 running/slurm
 configuration
+nucleus-database
 outputs
 analysis/fragmentation
 analysis/oscar
