@@ -1,0 +1,5 @@
+# Input schema for the original EMC Fig. 4 data; no measurements are filled in.
+# Source: https://doi.org/10.1007/BF01412322
+# z is the quoted position; errors are absolute. Units: beam_energy in GeV.
+# Supply either stat+sys or error on each row. Leave unknown bin bounds/beam blank.
+nucleus,beam_energy,z,z_low,z_high,R,stat,sys,error

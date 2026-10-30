@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import csv
+import glob
 import json
 import math
 import os
@@ -18,6 +19,16 @@ from matplotlib.ticker import AutoMinorLocator, MultipleLocator
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from hermes2007 import load_ratio
+
+# Match the GP profiles, with distinct styles for the early/late limits.
+PROFILE_STYLES = {
+    "000000": ("Early formation", "darkorange", (0, (7, 2, 1, 2, 1, 2))),
+    "000001": ("Profile A", "blue", "-."),
+    "000002": ("Profile B", "red", ":"),
+    "000003": ("Profile C", "purple", "--"),
+    "000004": ("Mean", "green", "-"),
+    "000005": ("Late formation", "saddlebrown", (0, (7, 3))),
+}
 
 
 class DataLegendHandle:
@@ -291,21 +302,75 @@ def build_experimental_index(
     return index
 
 
+def formation_time_value(yoda_path: str) -> str:
+    base = os.path.splitext(os.path.basename(yoda_path))[0]
+    match = re.search(r"tau[=_-](.+)$", base)
+    if match:
+        return match.group(1)
+    return base
+
+
+def formation_time_label_from_path(yoda_path: str) -> str:
+    base = os.path.splitext(os.path.basename(yoda_path))[0]
+    if base.startswith("profile_"):
+        pid = base[len("profile_"):]
+        return PROFILE_STYLES.get(pid, (f"Profile {pid}", "black", "-"))[0]
+    value = formation_time_value(yoda_path)
+    value_no_units = re.sub(r"fm$", "", value, flags=re.IGNORECASE)
+    if value_no_units.lower() in {"inf", "infty", "infinity"}:
+        return r"$\tau_\mathrm{form}\to\infty$"
+    if value.lower().endswith("fm"):
+        return rf"$\tau_\mathrm{{form}}={value_no_units}\,\mathrm{{fm}}$"
+    return rf"$\tau_\mathrm{{form}}={value}$"
+
+
 def scenario_label(scenario: Dict[str, object], deuterium_path: str) -> str:
     label = scenario.get("label")
     if isinstance(label, str) and label:
+        if label.startswith("$"):
+            return label
+        if label.startswith("tau"):
+            return formation_time_label_from_path(label + ".yoda")
         return label
-    base = os.path.splitext(os.path.basename(deuterium_path))[0]
-    return base.replace("-", " ")
+    return formation_time_label_from_path(deuterium_path)
 
 
 def scenario_defs_from_config(config: Dict[str, object], config_dir: str):
     raw_scenarios = config.get("scenarios")
+    if raw_scenarios is None and isinstance(config.get("profile_directory"), str):
+        profile_dir = resolve_path(config["profile_directory"], config_dir)
+        nuclei = config.get("nuclei", ["He", "Ne", "Kr", "Xe"])
+        raw_scenarios = []
+        paths = set(glob.glob(os.path.join(profile_dir, "d", "profile_*.yoda")))
+        paths.update(glob.glob(os.path.join(profile_dir, "d", "tau*.yoda")))
+        for deuterium in sorted(paths):
+            if os.path.getsize(deuterium) == 0:
+                print(f"[warn] Empty deuterium YODA file: {deuterium}; skipping.")
+                continue
+            filename = os.path.basename(deuterium)
+            raw_scenarios.append(
+                {
+                    "deuterium": deuterium,
+                    "nuclei": {
+                        nucleus: os.path.join(profile_dir, nucleus, filename)
+                        for nucleus in nuclei
+                    },
+                }
+            )
+        if not raw_scenarios:
+            raise ValueError(f"No nonempty profile_*.yoda or tau*.yoda files found in {profile_dir}/d")
     if not isinstance(raw_scenarios, list):
-        raise ValueError("Config must define a 'scenarios' list")
+        raise ValueError("Config must define a 'profile_directory' or 'scenarios' list")
 
-    linestyles = [":", "-.", "-", "--", (0, (3, 1, 1, 1)), (0, (5, 1)), (0, (1, 1))]
-    colors = ["black", "black", "black", "0.35", "0.35", "0.35"]
+    linestyles = ["-", "--", "-.", ":", (0, (3, 1, 1, 1)), (0, (5, 1)), (0, (1, 1))]
+    colors = [
+        "tab:blue",
+        "tab:red",
+        "tab:green",
+        "tab:purple",
+        "tab:orange",
+        "tab:brown",
+    ]
     scenarios = []
     for i, scenario in enumerate(raw_scenarios):
         if not isinstance(scenario, dict):
@@ -320,11 +385,15 @@ def scenario_defs_from_config(config: Dict[str, object], config_dir: str):
             str(nucleus): resolve_path(str(path), config_dir)
             for nucleus, path in nuclei.items()
         }
+        pid = os.path.splitext(os.path.basename(deuterium))[0].removeprefix("profile_")
+        _, default_color, default_linestyle = PROFILE_STYLES.get(
+            pid, ("", colors[i % len(colors)], linestyles[i % len(linestyles)])
+        )
         scenarios.append(
             {
                 "label": scenario_label(scenario, deuterium),
-                "linestyle": scenario.get("linestyle", linestyles[i % len(linestyles)]),
-                "color": scenario.get("color", colors[i % len(colors)]),
+                "linestyle": scenario.get("linestyle", default_linestyle),
+                "color": scenario.get("color", default_color),
                 "deuterium": deuterium,
                 "nuclei": nucleus_paths,
             }
@@ -361,22 +430,19 @@ def main():
     ap = argparse.ArgumentParser(
         description=(
             "Plot HERMES hadron multiplicity nuclear modification factors "
-            "R_A(z_h) comparing eHIJING and eHIJING+SMASH model variants."
+            "R_A(z_h) for cross-section profile comparisons."
         )
     )
     ap.add_argument(
         "--config",
         default=os.path.join(SCRIPT_DIR, "RA_vs_zh_inputs.yaml"),
-        help=(
-            "YAML/JSON config listing the deuterium and nuclear YODA files "
-            "for each model variant."
-        ),
+        help="YAML/JSON config listing the deuterium and nuclear YODA files.",
     )
     ap.add_argument(
         "--data-dir",
         default=os.path.abspath(
             os.path.join(
-                SCRIPT_DIR, "..", "..", "..", "experimental_data", "HERMES", "R_A"
+                SCRIPT_DIR, "..", "..", "..", "..", "experimental_data", "HERMES", "R_A"
             )
         ),
         help="Directory containing HERMES/R_A experimental CSVs.",
@@ -389,9 +455,10 @@ def main():
                 "..",
                 "..",
                 "..",
+                "..",
                 "output",
                 "HERMES",
-                "model_comparison",
+                "cross_section_profile_comparison",
                 "R_A",
             )
         ),
@@ -454,13 +521,13 @@ def main():
     scenarios = scenario_defs_from_config(config, config_dir)
 
     particle_labels = {
-        "pip": r"$\pi^+$",
-        "pim": r"$\pi^-$",
-        "kp": r"$K^+$",
-        "km": r"$K^-$",
-        "p": r"$p$",
-        "pbar": r"$\bar{p}$",
-        "pi0": r"$\pi^0$",
+        "pip": r"$\boldsymbol{\pi^+}$",
+        "pim": r"$\boldsymbol{\pi^-}$",
+        "kp": r"$\boldsymbol{K^+}$",
+        "km": r"$\boldsymbol{K^-}$",
+        "p": r"$\boldsymbol{p}$",
+        "pbar": r"$\boldsymbol{\bar{p}}$",
+        "pi0": r"$\boldsymbol{\pi^0}$",
     }
 
     exp_index = {} if args.no_exp else build_experimental_index(args.data_dir, nuclei)
@@ -508,7 +575,7 @@ def main():
             if ip < len(particles) - 1:
                 ax.tick_params(axis="x", labelbottom=False)
             else:
-                ax.set_xlabel(r"$z_h$", fontsize=14)
+                ax.set_xlabel(r"${z_h}$", fontsize=14)
             if inu > 0:
                 ax.tick_params(
                     axis="y", which="both", left=False, right=False, labelleft=False
@@ -516,7 +583,7 @@ def main():
             if ip == 0:
                 ax.set_title(nucleus, fontsize=14, fontweight="bold", pad=5)
             if inu == 0:
-                ax.set_ylabel(r"$R^h_A$", fontsize=14)
+                ax.set_ylabel(r"${R^h_A}$", fontsize=14)
                 ax.text(
                     0.075,
                     0.90,
@@ -617,21 +684,44 @@ def main():
         )
         for scenario in scenarios
     ]
-    first_ax = main_axes[(particles[0], nuclei[0])]
-    sim_legend = first_ax.legend(
-        handles=scenario_handles,
-        loc="lower left",
-        bbox_to_anchor=(0.02, 0.02),
-        frameon=False,
-        fontsize=8,
-        borderaxespad=0.0,
+    first_ax = main_axes.get(("pip", "He"), main_axes[(particles[0], nuclei[0])])
+    second_ax = main_axes.get(("pip", "Ne"), first_ax)
+    legend_order = {
+        label: i for i, label in enumerate(
+            ["Early formation", "Mean", "Late formation", "Profile A", "Profile B", "Profile C"]
+        )
+    }
+    scenario_handles.sort(
+        key=lambda handle: legend_order.get(handle.get_label(), len(legend_order))
     )
-    if data_handle_added:
-        first_ax.add_artist(sim_legend)
-        first_ax.legend(
-            handles=[DataLegendHandle(True)],
+    split = sum(
+        handle.get_label() in {"Early formation", "Mean", "Late formation"}
+        for handle in scenario_handles
+    )
+    legend_groups = (
+        [(first_ax, scenario_handles[:split]), (second_ax, scenario_handles[split:])]
+        if second_ax is not first_ax
+        else [(first_ax, scenario_handles)]
+    )
+    for ax, handles in legend_groups:
+        if not handles:
+            continue
+        sim_legend = ax.legend(
+            handles=handles,
             loc="lower left",
-            bbox_to_anchor=(0.02, 0.275),
+            bbox_to_anchor=(0.02, 0.02),
+            frameon=False,
+            fontsize=8,
+            handlelength=3.0,
+            borderaxespad=0.0,
+        )
+        if ax is second_ax and data_handle_added:
+            ax.add_artist(sim_legend)
+    if data_handle_added:
+        second_ax.legend(
+            handles=[DataLegendHandle(True)],
+            loc="upper left",
+            bbox_to_anchor=(0.02, 0.98),
             frameon=False,
             fontsize=8,
             labels=[r"HERMES"],

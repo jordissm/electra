@@ -1,0 +1,17 @@
+{
+  "title": "Charged-hadron times: HERMES, EMC and CLAS",
+  "samples": [
+    {
+      "label": "HERMES",
+      "yoda": "../../../../output/HERMES/hadronization_comparison/times_vs_zh/ehijing-decays.yoda"
+    },
+    {
+      "label": "EMC",
+      "yoda": "../../../../output/EMC/hadronization_comparison/times_vs_zh/ehijing-decays.yoda"
+    },
+    {
+      "label": "CLAS",
+      "yoda": "../../../../output/CLAS/hadronization_comparison/times_vs_zh/ehijing-decays.yoda"
+    }
+  ]
+}

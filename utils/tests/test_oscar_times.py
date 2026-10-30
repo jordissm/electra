@@ -13,7 +13,7 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[2]
-PLOT_DIR = ROOT / "analysis/scripts/hadronization_comparison/times_vs_zh"
+PLOT_DIR = ROOT / "analysis/scripts/experiment_comparison/hadronization_comparison/times_vs_zh"
 sys.path.insert(0, str(PLOT_DIR))
 from plot_times_vs_zh import BASE, load_sample, plot_samples, read_profiles
 

@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 import argparse
 import csv
-import glob
 import json
 import math
 import os
@@ -292,74 +291,21 @@ def build_experimental_index(
     return index
 
 
-def formation_time_value(yoda_path: str) -> str:
-    base = os.path.splitext(os.path.basename(yoda_path))[0]
-    match = re.search(r"tau[=_-](.+)$", base)
-    if match:
-        return match.group(1)
-    return base
-
-
-def formation_time_label_from_path(yoda_path: str) -> str:
-    base = os.path.splitext(os.path.basename(yoda_path))[0]
-    if base.startswith("profile_"):
-        return f"Profile {base[len('profile_'):]}"
-    value = formation_time_value(yoda_path)
-    value_no_units = re.sub(r"fm$", "", value, flags=re.IGNORECASE)
-    if value_no_units.lower() in {"inf", "infty", "infinity"}:
-        return r"$\tau_\mathrm{form}\to\infty$"
-    if value.lower().endswith("fm"):
-        return rf"$\tau_\mathrm{{form}}={value_no_units}\,\mathrm{{fm}}$"
-    return rf"$\tau_\mathrm{{form}}={value}$"
-
-
 def scenario_label(scenario: Dict[str, object], deuterium_path: str) -> str:
     label = scenario.get("label")
     if isinstance(label, str) and label:
-        if label.startswith("$"):
-            return label
-        if label.startswith("tau"):
-            return formation_time_label_from_path(label + ".yoda")
         return label
-    return formation_time_label_from_path(deuterium_path)
+    base = os.path.splitext(os.path.basename(deuterium_path))[0]
+    return base.replace("-", " ")
 
 
 def scenario_defs_from_config(config: Dict[str, object], config_dir: str):
     raw_scenarios = config.get("scenarios")
-    if raw_scenarios is None and isinstance(config.get("profile_directory"), str):
-        profile_dir = resolve_path(config["profile_directory"], config_dir)
-        nuclei = config.get("nuclei", ["He", "Ne", "Kr", "Xe"])
-        raw_scenarios = []
-        paths = set(glob.glob(os.path.join(profile_dir, "d", "profile_*.yoda")))
-        paths.update(glob.glob(os.path.join(profile_dir, "d", "tau*.yoda")))
-        for deuterium in sorted(paths):
-            if os.path.getsize(deuterium) == 0:
-                print(f"[warn] Empty deuterium YODA file: {deuterium}; skipping.")
-                continue
-            filename = os.path.basename(deuterium)
-            raw_scenarios.append(
-                {
-                    "deuterium": deuterium,
-                    "nuclei": {
-                        nucleus: os.path.join(profile_dir, nucleus, filename)
-                        for nucleus in nuclei
-                    },
-                }
-            )
-        if not raw_scenarios:
-            raise ValueError(f"No nonempty profile_*.yoda or tau*.yoda files found in {profile_dir}/d")
     if not isinstance(raw_scenarios, list):
-        raise ValueError("Config must define a 'profile_directory' or 'scenarios' list")
+        raise ValueError("Config must define a 'scenarios' list")
 
-    linestyles = ["-", "--", "-.", ":", (0, (3, 1, 1, 1)), (0, (5, 1)), (0, (1, 1))]
-    colors = [
-        "tab:blue",
-        "tab:red",
-        "tab:green",
-        "tab:purple",
-        "tab:orange",
-        "tab:brown",
-    ]
+    linestyles = [":", "-.", "-", "--", (0, (3, 1, 1, 1)), (0, (5, 1)), (0, (1, 1))]
+    colors = ["black", "black", "black", "0.35", "0.35", "0.35"]
     scenarios = []
     for i, scenario in enumerate(raw_scenarios):
         if not isinstance(scenario, dict):
@@ -415,19 +361,22 @@ def main():
     ap = argparse.ArgumentParser(
         description=(
             "Plot HERMES hadron multiplicity nuclear modification factors "
-            "R_A(z_h) for cross-section profile comparisons."
+            "R_A(z_h) comparing eHIJING and eHIJING+SMASH model variants."
         )
     )
     ap.add_argument(
         "--config",
         default=os.path.join(SCRIPT_DIR, "RA_vs_zh_inputs.yaml"),
-        help="YAML/JSON config listing the deuterium and nuclear YODA files.",
+        help=(
+            "YAML/JSON config listing the deuterium and nuclear YODA files "
+            "for each model variant."
+        ),
     )
     ap.add_argument(
         "--data-dir",
         default=os.path.abspath(
             os.path.join(
-                SCRIPT_DIR, "..", "..", "..", "experimental_data", "HERMES", "R_A"
+                SCRIPT_DIR, "..", "..", "..", "..", "experimental_data", "HERMES", "R_A"
             )
         ),
         help="Directory containing HERMES/R_A experimental CSVs.",
@@ -440,9 +389,10 @@ def main():
                 "..",
                 "..",
                 "..",
+                "..",
                 "output",
                 "HERMES",
-                "cross_section_profile_comparison",
+                "model_comparison",
                 "R_A",
             )
         ),
@@ -505,13 +455,13 @@ def main():
     scenarios = scenario_defs_from_config(config, config_dir)
 
     particle_labels = {
-        "pip": r"$\boldsymbol{\pi^+}$",
-        "pim": r"$\boldsymbol{\pi^-}$",
-        "kp": r"$\boldsymbol{K^+}$",
-        "km": r"$\boldsymbol{K^-}$",
-        "p": r"$\boldsymbol{p}$",
-        "pbar": r"$\boldsymbol{\bar{p}}$",
-        "pi0": r"$\boldsymbol{\pi^0}$",
+        "pip": r"$\pi^+$",
+        "pim": r"$\pi^-$",
+        "kp": r"$K^+$",
+        "km": r"$K^-$",
+        "p": r"$p$",
+        "pbar": r"$\bar{p}$",
+        "pi0": r"$\pi^0$",
     }
 
     exp_index = {} if args.no_exp else build_experimental_index(args.data_dir, nuclei)
@@ -559,7 +509,7 @@ def main():
             if ip < len(particles) - 1:
                 ax.tick_params(axis="x", labelbottom=False)
             else:
-                ax.set_xlabel(r"${z_h}$", fontsize=14)
+                ax.set_xlabel(r"$z_h$", fontsize=14)
             if inu > 0:
                 ax.tick_params(
                     axis="y", which="both", left=False, right=False, labelleft=False
@@ -567,7 +517,7 @@ def main():
             if ip == 0:
                 ax.set_title(nucleus, fontsize=14, fontweight="bold", pad=5)
             if inu == 0:
-                ax.set_ylabel(r"${R^h_A}$", fontsize=14)
+                ax.set_ylabel(r"$R^h_A$", fontsize=14)
                 ax.text(
                     0.075,
                     0.90,

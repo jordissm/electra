@@ -13,7 +13,7 @@ from hermes2007 import load_ratio
 from model_comparison.R_A.plot_RA_vs_zh import load_yaml_config, particle_from_description
 
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 AXES = {"nu": (r"$\nu$ [GeV]", (4, 23.5)),
         "zh": (r"$z_h$", (0.1, 1.3)),
         "Q2": (r"$Q^2$ [GeV$^2$]", (1, 25))}
