@@ -10,6 +10,7 @@ After [installation](../getting-started.md), run from the repository root:
 
 ```bash
 ./electra-shell -- electra ehijing run \
+  --nucleus d \
   --run-path /workspace/output/runs/demo/ehijing \
   --number-of-events 10 \
   --chunk-size 10 \
@@ -28,6 +29,12 @@ in all three paths with a [supplied bundle name](../configuration.md#experiment-
 
 The ELECTRA CLI defaults to Generalized Higher Twist (GHT), mode `1`.
 Add `--medium-modification-mode 0` to select Higher Twist (HT).
+
+Select a target with `--nucleus C12`, `--nucleus Kr84`, or another key in
+`input/ehijing/woods_saxon.yaml`. The executable reads A, Z, the nucleon width
+and distribution parameters from that entry. Use `--nucleus-database PATH`
+for a different YAML file; the Python wrapper defaults to `d` when no target
+is supplied. Legacy `--Z`/`--A` remain available as an alternative to the name.
 
 Current eHIJING builds default to the shared nuclear target and disable
 HepMC history collection. Add `--history on` when you need

@@ -1,0 +1,104 @@
+nuclei:
+  d:
+    Z: 1
+    A: 2
+    distribution: "hulthen"
+    nucleon_width_fm: 0.5
+    hulthen_alpha_fm_inv: 0.228
+    hulthen_beta_fm_inv: 1.18
+
+  He4:
+    Z: 2
+    A: 4
+    distribution: "woods_saxon"
+    nucleon_width_fm: 0.5
+    nuclear_radius_fm: 1.3
+    nuclear_surface_fm: 0.3
+
+  C12:
+    Z: 6
+    A: 12
+    distribution: "woods_saxon"
+    nucleon_width_fm: 0.5
+    nuclear_radius_fm: 2.3
+    nuclear_surface_fm: 0.4
+
+  Ne20:
+    Z: 10
+    A: 20
+    distribution: "woods_saxon"
+    nucleon_width_fm: 0.5
+    nuclear_radius_fm: 2.7233
+    nuclear_surface_fm: 0.54
+
+  Fe56:
+    Z: 26
+    A: 56
+    distribution: "woods_saxon"
+    nucleon_width_fm: 0.5
+    nuclear_radius_fm: 4.0602
+    nuclear_surface_fm: 0.54
+
+  Cu63:
+    Z: 29
+    A: 63
+    distribution: "woods_saxon"
+    nucleon_width_fm: 0.5
+    nuclear_radius_fm: 4.2
+    nuclear_surface_fm: 0.596
+
+  Cu64:
+    Z: 29
+    A: 64
+    distribution: "woods_saxon"
+    nucleon_width_fm: 0.5
+    nuclear_radius_fm: 4.2221
+    nuclear_surface_fm: 0.596
+
+  Kr84:
+    Z: 36
+    A: 84
+    distribution: "woods_saxon"
+    nucleon_width_fm: 0.5
+    nuclear_radius_fm: 4.7087
+    nuclear_surface_fm: 0.54
+
+  Sn119:
+    Z: 50
+    A: 119
+    distribution: "woods_saxon"
+    nucleon_width_fm: 0.5
+    nuclear_radius_fm: 5.3341
+    nuclear_surface_fm: 0.54
+
+  Xe129:
+    Z: 54
+    A: 129
+    distribution: "woods_saxon"
+    nucleon_width_fm: 0.5
+    nuclear_radius_fm: 5.36
+    nuclear_surface_fm: 0.59
+
+  Au197:
+    Z: 79
+    A: 197
+    distribution: "woods_saxon"
+    nucleon_width_fm: 0.5
+    nuclear_radius_fm: 6.38
+    nuclear_surface_fm: 0.535
+
+  Pb208:
+    Z: 82
+    A: 208
+    distribution: "woods_saxon"
+    nucleon_width_fm: 0.5
+    nuclear_radius_fm: 6.62
+    nuclear_surface_fm: 0.546
+
+  U238:
+    Z: 92
+    A: 238
+    distribution: "woods_saxon"
+    nucleon_width_fm: 0.5
+    nuclear_radius_fm: 6.81
+    nuclear_surface_fm: 0.6

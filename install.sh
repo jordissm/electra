@@ -79,6 +79,7 @@ patch_slurm_scripts() {
     -e "s|^CONFIG_PATH=.*$|CONFIG_PATH=\"\${CONFIG_PATH:-$INPUT_DIR/ehijing/experiments/\${EXPERIMENT}/hard_process.setting}\"|" \
     -e "s|^HADRONIZATION_CONFIG_PATH=.*$|HADRONIZATION_CONFIG_PATH=\"\${HADRONIZATION_CONFIG_PATH:-$INPUT_DIR/ehijing/experiments/\${EXPERIMENT}/hadronization.setting}\"|" \
     -e "s|^DIS_CUTS_CONFIG_PATH=.*$|DIS_CUTS_CONFIG_PATH=\"\${DIS_CUTS_CONFIG_PATH:-$INPUT_DIR/ehijing/experiments/\${EXPERIMENT}/dis_cuts.setting}\"|" \
+    -e "s|^NUCLEUS_DATABASE_DEFAULT=.*$|NUCLEUS_DATABASE_DEFAULT=\"$INPUT_DIR/ehijing/woods_saxon.yaml\"|" \
     "$dir/ehijing_submit.sh"
   fi
 

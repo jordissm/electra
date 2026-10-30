@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class MediumModeTest(unittest.TestCase):
     def test_cli_default_and_explicit_ht_are_forwarded(self):
-        settings = ROOT / "input/ehijing/experiments/hermes"
+        settings = ROOT / "input/ehijing/experiments/hermes_2007"
         with tempfile.TemporaryDirectory() as temporary:
             arguments = ["ehijing", "run", "--run-path", str(Path(temporary) / "run"),
                          "--number-of-events", "1", "--chunk-size", "1",
@@ -40,7 +40,7 @@ class MediumModeTest(unittest.TestCase):
             config = root / "cluster.env"
             environment = {
                 "PATH": str(binary_dir) + os.pathsep + os.environ["PATH"], "USER": "testuser",
-                "PROJECT_ROOT": str(ROOT), "EXPERIMENT": "hermes", "SLURM_CONFIG": str(config),
+                "PROJECT_ROOT": str(ROOT), "EXPERIMENT": "hermes_2007", "SLURM_CONFIG": str(config),
                 "OUTPUT_HOST": str(root / "output"), "CAPTURE": str(capture),
             }
             cases = [

@@ -8,7 +8,7 @@ and host output directory before submitting jobs.
 
 ```bash
 bash slurm-scripts/ehijing_submit.sh \
-  EXPERIMENT=hermes_2007 NEVENTS=1000 CHUNK_SIZE=100 SEED=12345
+  EXPERIMENT=hermes_2007 NUCLEUS=Kr84 NEVENTS=1000 CHUNK_SIZE=100 SEED=12345
 ```
 
 `EXPERIMENT` is required and selects a directory under
@@ -29,10 +29,15 @@ Prefer a new run ID for a new configuration.
 The script defaults to Generalized Higher Twist (`MED_MODIF_MODE=1`). Set
 `MED_MODIF_MODE=0` in `cluster.env`, the environment, or the submission arguments
 to select Higher Twist. Submission arguments take precedence over `cluster.env`.
-The physical-parameter section still assigns `Z=1`, `A=2` and `K=4.0` directly,
-overriding their environment values; inspect it before using a different target.
+Select the target with `NUCLEUS=d`, `NUCLEUS=C12`, or another YAML key. The
+default is `d`; A, Z and geometry parameters are read from
+`input/ehijing/woods_saxon.yaml`. `NUCLEUS_DATABASE=/absolute/path/nuclei.yaml`
+selects a custom host file, which the script binds read-only into the container.
+`NUCLEUS` and `NUCLEUS_DATABASE` can be set in `cluster.env`, the environment,
+or submission arguments. The physical-parameter section still assigns `K=4.0`.
 Optional shared-target controls are passed through using `NUCLEAR_TARGET`,
-`NUCLEON_WIDTH_FM`, `NUCLEAR_RADIUS_FM` and `NUCLEAR_SURFACE_FM`.
+`NUCLEON_WIDTH_FM`, `NUCLEAR_RADIUS_FM` and `NUCLEAR_SURFACE_FM`; the geometry
+flags override the selected YAML values.
 
 `SEED` is forwarded unchanged to every array task. Its default is `12345` for
 eHIJING and `98765` for SMASH. Keep eHIJING chunk starts fixed for replay; SLURM

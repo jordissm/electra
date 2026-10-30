@@ -103,6 +103,32 @@ Omitting them leaves the executable's defaults in force, including when using
 an older executable. The current nuclear-target implementation and supported
 geometry parameters are documented in [shared nuclear target and recoil](_generated/nuclear-target.md).
 
+## Woods–Saxon parameter database
+
+[`input/ehijing/woods_saxon.yaml`](../input/ehijing/woods_saxon.yaml) contains
+nucleus entries for the CLAS, EMC and HERMES comparisons, including deuterium
+(`d`). Each species has its own
+`nucleon_width_fm`, alongside A, Z and its distribution parameters.
+Deuterium uses Hulthén sampling; the other entries use Woods–Saxon sampling.
+
+The companion [database notes](../input/ehijing/woods_saxon.md) describe the
+fields, units, source references, estimates, isotope choices and local/SLURM
+usage. Select an entry with `--nucleus C12` on `ehijing` or
+`electra ehijing run`; the executable loads its A, Z and geometry parameters.
+`--nucleus-database PATH` selects a custom YAML file. Otherwise, lookup uses
+`ELECTRA_NUCLEUS_DATABASE`, the working directory's `input/ehijing/woods_saxon.yaml`,
+the executable's adjacent `../share/electra/ehijing/woods_saxon.yaml`, and the
+source/build-time installation paths, in that order. Explicit geometry flags
+override the YAML values. A missing file, unknown name or invalid entry fails
+before generation. Use `ehijing --nucleus C12 --describe-nucleus` to inspect the
+resolved parameters as JSON without initializing the generator.
+
+SLURM accepts `NUCLEUS=C12` and optional `NUCLEUS_DATABASE=PATH`. Existing
+`--Z`/`--A` callers remain supported, but cannot be combined with `--nucleus`.
+Named-target run metadata and Python resume provenance record the resolved
+parameters and database SHA-256; changing the database prevents silently
+resuming an existing chunk.
+
 ## SMASH formation times
 
 The modified SMASH fork defaults to `OSCAR` mode in List and ListBox input:

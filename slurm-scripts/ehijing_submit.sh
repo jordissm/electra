@@ -50,24 +50,20 @@ IMG="${IMG:-/scratch/$USER/containers/electra.sif}"
 OUTPUT_HOST="${OUTPUT_HOST:-$PROJECT_ROOT/output}"
 OUTPUT_CONT="${OUTPUT_CONT:-/workspace/output}"
 
-# Physical parameters for eHIJING
-# HERMES
-# d:        He4:      Ne:       Kr:       Xe:
-#   Z: 1      Z: 2      Z: 10     Z: 36     Z: 54
-#   A: 2      A: 4      A: 20     A: 84     A: 131
-# CLAS
-# d:        C:        Fe:       Pb:
-#   Z: 1      Z: 6      Z: 26     Z: 82
-#   A: 2      A: 12     A: 56     A: 208
-# EIC
-# d:        He3:      C:        Ca:       Fe:       Au:
-#   Z: 1      Z: 2      Z: 6      Z: 20     Z: 26     Z: 79
-#   A: 2      A: 3      A: 12     A: 40     A: 56     A: 197
-Z=1 #36
-A=2 #84
+# Target parameters are resolved by eHIJING from the selected YAML entry.
+NUCLEUS="${NUCLEUS:-d}"
+NUCLEUS_DATABASE_DEFAULT="$PROJECT_ROOT/input/ehijing/woods_saxon.yaml"
+NUCLEUS_DATABASE="${NUCLEUS_DATABASE:-$NUCLEUS_DATABASE_DEFAULT}"
+if ! [[ "$NUCLEUS" =~ ^[A-Za-z][A-Za-z0-9]*$ ]]; then
+    echo "Error: NUCLEUS must be a database key such as d or C12" >&2; exit 1
+fi
+if [[ ! -r "$NUCLEUS_DATABASE" ]]; then
+    echo "Error: nucleus database is missing or unreadable: $NUCLEUS_DATABASE" >&2; exit 1
+fi
+NUCLEUS_DATABASE="$(cd "$(dirname "$NUCLEUS_DATABASE")" && pwd -P)/$(basename "$NUCLEUS_DATABASE")"
 MED_MODIF_MODE="${MED_MODIF_MODE:-1}" # Generalized Higher Twist; 0 selects Higher Twist.
 K=4.0
-# Optional shared-target controls; omit flags for older executable compatibility.
+# Optional runtime mode and overrides of the selected database parameters.
 NUCLEAR_ARGS=""
 if [[ -n "${NUCLEAR_TARGET:-}" ]]; then
     case "$NUCLEAR_TARGET" in
@@ -193,6 +189,8 @@ mkdir -p "$LOG_DIR"
 echo "Submitting eHIJING run:"
 echo "  run id       : $RUN_ID"
 echo "  run dir      : $EHIJING_RUN_DIR_CONT"
+echo "  nucleus      : $NUCLEUS"
+echo "  database     : $NUCLEUS_DATABASE"
 echo "  total events : $NEVENTS"
 echo "  medium mode  : $MED_MODIF_MODE (0: HT, 1: GHT)"
 echo "  chunk size   : $CHUNK_SIZE"
@@ -244,8 +242,9 @@ CONFIG_PATH="${CONFIG_PATH}"
 HADRONIZATION_CONFIG_PATH="${HADRONIZATION_CONFIG_PATH}"
 DIS_CUTS_CONFIG_PATH="${DIS_CUTS_CONFIG_PATH}"
 
-Z="${Z:-1}"
-A="${A:-2}"
+NUCLEUS="${NUCLEUS}"
+NUCLEUS_DATABASE="${NUCLEUS_DATABASE}"
+NUCLEAR_ARGS="${NUCLEAR_ARGS}"
 MED_MODIF_MODE="${MED_MODIF_MODE:-1}"
 K="${K:-4.0}"
 NEVENTS="${NEVENTS}"
@@ -273,25 +272,25 @@ apptainer exec \
     --cleanenv \
     --bind "\${PROJECT_ROOT}:\${PROJECT_ROOT}" \
     --bind "\${OUTPUT_HOST}:\${OUTPUT_CONT}" \
+    --bind "\${NUCLEUS_DATABASE}:\${NUCLEUS_DATABASE}:ro" \
     --pwd /workspace \
     "\${IMG}" \
     /usr/local/bin/entrypoint.sh \
-    /bin/bash --noprofile --norc -lc "
-        set -euo pipefail
-        electra ehijing run \
-            --seed ${SEED} \
-            --Z ${Z} ${NUCLEAR_ARGS} \
-            --A ${A} \
-            --medium-modification-mode \${MED_MODIF_MODE} \
-            --run-path \${EHIJING_RUN_DIR_CONT} \
-            --tabulation-path \${TASK_TABLE_PATH} \
-            --hard-process-config \${CONFIG_PATH} \
-            --hadronization-config \${HADRONIZATION_CONFIG_PATH} \
-            --dis-cuts-config \${DIS_CUTS_CONFIG_PATH} \
-            --number-of-events \${TASK_NEVENTS} \
-            --first-event-id \${FIRST_EVENT_ID} \
-            --chunk-size \${CHUNK_SIZE} \
-    "
+    electra ehijing run \
+        --seed ${SEED} \
+        --nucleus "\${NUCLEUS}" \${NUCLEAR_ARGS} \
+        --nucleus-database "\${NUCLEUS_DATABASE}" \
+        --medium-modification-mode \${MED_MODIF_MODE} \
+        --K "\${K}" \
+        --run-path "\${EHIJING_RUN_DIR_CONT}" \
+        --tabulation-path "\${TASK_TABLE_PATH}" \
+        --hard-process-config "\${CONFIG_PATH}" \
+        --hadronization-config "\${HADRONIZATION_CONFIG_PATH}" \
+        --dis-cuts-config "\${DIS_CUTS_CONFIG_PATH}" \
+        --number-of-events "\${TASK_NEVENTS}" \
+        --first-event-id "\${FIRST_EVENT_ID}" \
+        --chunk-size "\${CHUNK_SIZE}"
+
 EOF
 )
 

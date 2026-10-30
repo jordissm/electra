@@ -117,7 +117,7 @@ RUN --mount=type=cache,id=apt-cache-${TARGETPLATFORM},target=/var/cache/apt,shar
     libfreetype-dev libgif-dev libgmp-dev libgraphviz-dev libgsl-dev libjpeg-dev \
     libjpeg8-dev libllvm13 liblzma-dev libmpfr-dev libmpfrc++-dev libopenmpi-dev \
     libpcre3-dev libpcre++-dev libpng-dev libpng-tools libtbb-dev libssl-dev \
-    libtool libx11-dev libxext-dev libxft-dev libxml2-dev libxpm-dev libxxhash-dev \
+    libtool libx11-dev libxext-dev libxft-dev libxml2-dev libxpm-dev libxxhash-dev libyaml-cpp-dev \
     libzstd-dev linux-libc-dev llvm-13 llvm-13-dev llvm-13-linker-tools llvm-13-runtime \
     llvm-13-tools locales locales-all lsb-base lsb-release lzma python3-args \
     python3-atomicwrites python3-colorama python3-cryptography python3-dateutil \
@@ -431,26 +431,29 @@ EOF
 FROM smash-build AS ehijing-install
 ARG PROJECT_DIR
 
+COPY src/ehijing/ ${PROJECT_DIR}/ehijing/
+COPY input/ehijing/woods_saxon.yaml ${PROJECT_DIR}/share/input-defaults/ehijing/woods_saxon.yaml
+
 RUN <<EOF
   # Installing ehijing
   set -euxo pipefail
   mkdir -p ${PROJECT_DIR}/ehijing_bin
   cd ${PROJECT_DIR}
-  git clone https://github.com/jordissm/ehijing.git
-  git -C ehijing log -1 --format='%H %ci %s'
   cd ehijing/external/pythia8
   ./configure --cxx-common='${CXXFLAGS} -fPIC'
+  make clean
   make -j$(nproc)
-  mkdir -p ${PROJECT_DIR}/ehijing/build
-  cd ${PROJECT_DIR}/ehijing/build
+  mkdir -p ${PROJECT_DIR}/ehijing_container_build
+  cd ${PROJECT_DIR}/ehijing_container_build
   cmake -DPYTHIA8_INCLUDE_DIR=${PROJECT_DIR}/ehijing/external/pythia8/include/ \
-        -DPYTHIA8_LIBRARY=${PROJECT_DIR}/ehijing/external/pythia8/lib/libpythia8.a ..
+        -DPYTHIA8_LIBRARY=${PROJECT_DIR}/ehijing/external/pythia8/lib/libpythia8.a \
+        -DEHIJING_NUCLEUS_DATABASE=${PROJECT_DIR}/share/input-defaults/ehijing/woods_saxon.yaml ${PROJECT_DIR}/ehijing
   make ehijing -j$(nproc)
   if [[ $? -ne 0 ]]; then
     echo "Error: 'make ehijing -j$(nproc)' compilation failed!"
   fi
-  if [[ -f ${PROJECT_DIR}/ehijing/build/ehijing ]]; then
-    cp ${PROJECT_DIR}/ehijing/build/ehijing ${PROJECT_DIR}/ehijing_bin/
+  if [[ -f ${PROJECT_DIR}/ehijing_container_build/ehijing ]]; then
+    cp ${PROJECT_DIR}/ehijing_container_build/ehijing ${PROJECT_DIR}/ehijing_bin/
     cp -r ${PROJECT_DIR}/ehijing/config/ ${PROJECT_DIR}/ehijing_bin/
     cp -r ${PROJECT_DIR}/ehijing/scripts/ ${PROJECT_DIR}/ehijing_bin/
   else

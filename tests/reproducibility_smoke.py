@@ -29,7 +29,7 @@ def main():
     args = parser.parse_args()
     executable = args.executable.resolve()
     repo = Path(__file__).resolve().parents[1]
-    bundle = repo / "input/ehijing/experiments/hermes"
+    bundle = repo / "input/ehijing/experiments/hermes_2007"
     with tempfile.TemporaryDirectory(prefix="electra-seed-replay-") as temporary:
         root = Path(temporary).resolve()
         hadronization = root / "hadronization.setting"
@@ -37,7 +37,8 @@ def main():
                                  + "\nHadronVertex:trace = off\n")
         tables = root / "tables"
         tables.mkdir()
-        common = ["--Z", "1", "--A", "2", "--K", "4", "--first-event-id", "7",
+        common = ["--nucleus", "d", "--nucleus-database", str(repo / "input/ehijing/woods_saxon.yaml"),
+                  "--K", "4", "--first-event-id", "7",
                   "--hard-process-config", str(bundle / "hard_process.setting"),
                   "--hadronization-config", str(hadronization),
                   "--dis-cuts-config", str(bundle / "dis_cuts.setting"),

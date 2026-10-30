@@ -116,7 +116,7 @@ class SeedPolicyTest(unittest.TestCase):
             sbatch.chmod(0o755)
             capture = root / "submitted.sh"
             environment = {"PATH": str(binary_dir) + os.pathsep + os.environ["PATH"],
-                           "USER": "testuser", "PROJECT_ROOT": str(repo), "EXPERIMENT": "hermes",
+                           "USER": "testuser", "PROJECT_ROOT": str(repo), "EXPERIMENT": "hermes_2007",
                            "SLURM_CONFIG": str(root / "no-cluster-config"),
                            "OUTPUT_HOST": str(root / "output"), "RUN_DIR_HOST": str(root / "output"),
                            "RUN_DIR": str(root / "run"), "CAPTURE": str(capture),

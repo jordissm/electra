@@ -38,7 +38,7 @@ curl -fsSL https://raw.githubusercontent.com/jordissm/electra/main/install.sh -o
 1. Execute `ehijing` using the SLURM script provided:
 
 ```terminal
-bash slurm-scripts/ehijing_submit.sh EXPERIMENT=hermes_2007 NEVENTS=<NEVENTS> CHUNK_SIZE=<CHUNK_SIZE> SEED=12345
+bash slurm-scripts/ehijing_submit.sh EXPERIMENT=hermes_2007 NUCLEUS=Kr84 NEVENTS=<NEVENTS> CHUNK_SIZE=<CHUNK_SIZE> SEED=12345
 ```
 
 where `<NEVENTS>` should be an integer between `1` and `1_000_000` and `<CHUNK_SIZE>` should be an integer between `1` and `<NEVENTS>`.

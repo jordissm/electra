@@ -212,6 +212,20 @@ def ehijing_run_layout(run_dir: Path) -> Dict[str, Path]:
 # -----------------------------------------------------------------------------
 
 
+def resolve_nucleus(name: str, database: Optional[Path] = None, **overrides: Optional[float]) -> Dict[str, Any]:
+    """Ask the executable's YAML reader for parameters without generating events."""
+    command = ["ehijing", "--nucleus", name, "--describe-nucleus"]
+    if database is not None:
+        command.extend(["--nucleus-database", str(database)])
+    for key, value in overrides.items():
+        if value is not None:
+            command.extend(["--" + key.replace("_", "-"), str(value)])
+    result = subprocess.run(command, capture_output=True, text=True)
+    if result.returncode:
+        raise ValueError(result.stderr.strip() or "eHIJING could not resolve the nucleus")
+    return json.loads(result.stdout)
+
+
 def ehijing_task(
     run_dir: Path,
     first_event_id: int,
@@ -219,8 +233,10 @@ def ehijing_task(
     chunk_size: Optional[int],
     base_seed: int,
     *,
-    Z: int,
-    A: int,
+    Z: Optional[int] = None,
+    A: Optional[int] = None,
+    nucleus: Optional[str] = None,
+    nucleus_database: Optional[Path] = None,
     mode: int,
     K: float,
     table_path: Path,
@@ -233,6 +249,27 @@ def ehijing_task(
     nuclear_radius_fm: Optional[float] = None,
     nuclear_surface_fm: Optional[float] = None,
 ) -> None:
+    if nucleus is not None and (Z is not None or A is not None):
+        raise ValueError("Use --nucleus or legacy --Z/--A, not both")
+    if nucleus is None and Z is None and A is None:
+        nucleus = "d"
+    nucleus_record: Dict[str, Any] = {}
+    if nucleus is not None:
+        parameters = resolve_nucleus(nucleus, nucleus_database,
+            nucleon_width_fm=nucleon_width_fm, nuclear_radius_fm=nuclear_radius_fm,
+            nuclear_surface_fm=nuclear_surface_fm)
+        Z, A = parameters["Z"], parameters["A"]
+        nucleus_database = Path(parameters["nucleus_database"])
+        nucleus_record = {
+            "nucleus": nucleus,
+            "nucleus_database_sha256": file_sha256(nucleus_database),
+            "nucleus_parameters": {key: value for key, value in parameters.items()
+                                   if key != "nucleus_database"},
+        }
+    elif Z is None or A is None:
+        raise ValueError("Legacy target selection requires both --Z and --A")
+    elif nucleus_database is not None:
+        raise ValueError("--nucleus-database requires --nucleus")
     layout = ehijing_run_layout(run_dir)
     mkdir(layout["events"])
     mkdir(layout["logs"])
@@ -246,6 +283,7 @@ def ehijing_task(
     chunk_done = events_dir / f".chunk_{first_event_id:08d}_{nevents}.done"
     chunk_provenance = chunk_done.with_suffix(".provenance.json")
     request = {
+        **nucleus_record,
         "seed_policy": SEED_POLICY, "master_seed": str(base_seed),
         "first_event_id": first_event_id, "number_of_events": nevents,
         "chunk_size": chunk_size if chunk_size is not None else nevents,
@@ -285,10 +323,6 @@ def ehijing_task(
         str(first_event_id),
         "--chunk-size",
         str(chunk_size) if chunk_size is not None else str(nevents),
-        "--Z",
-        str(Z),
-        "--A",
-        str(A),
         "--medium-modification-mode",
         str(mode),
         "--K",
@@ -306,6 +340,10 @@ def ehijing_task(
         "--seed",
         str(seed),
     ]
+    if nucleus is not None:
+        cmd.extend(["--nucleus", nucleus, "--nucleus-database", str(nucleus_database)])
+    else:
+        cmd.extend(["--Z", str(Z), "--A", str(A)])
 
     if history is not None:
         cmd.extend(["--history", history])
@@ -314,6 +352,8 @@ def ehijing_task(
         if value is not None:
             cmd.extend([flag, str(value)])
     run(cmd)
+    if nucleus is not None and file_sha256(nucleus_database) != nucleus_record["nucleus_database_sha256"]:
+        raise ValueError("Nucleus database changed during generation; refusing to mark the chunk complete")
 
     metadata_files = list(events_dir.rglob(f"event_{first_event_id:08d}.meta.json"))
     if len(metadata_files) != 1:
@@ -322,11 +362,20 @@ def ehijing_task(
     if (effective["policy"] != SEED_POLICY or effective["master_seed"] != str(base_seed)
             or effective["first_event_id"] != first_event_id):
         raise ValueError("eHIJING seed provenance does not match the requested chunk")
+    if nucleus is not None:
+        expected_parameters = {**nucleus_record["nucleus_parameters"],
+                               "nucleus_database": str(nucleus_database)}
+        if (effective.get("nucleus_parameters") != expected_parameters or
+                effective.get("inputs_sha256", {}).get("nucleus_database") !=
+                nucleus_record["nucleus_database_sha256"]):
+            raise ValueError("eHIJING nucleus provenance does not match the requested database and parameters")
     tables = table_digests(Path(table_path), mode)
     provenance = {"request": request, "tables_sha256": tables}
     save_provenance(chunk_provenance, provenance)
 
     record = {
+        **nucleus_record,
+        **({"nucleus_database": str(nucleus_database)} if nucleus is not None else {}),
         "first_event_id": first_event_id,
         "number_of_events": nevents,
         "chunk_size": chunk_size,
@@ -503,10 +552,12 @@ def cmd_ehijing(args: argparse.Namespace) -> None:
         run_dir,
         int(args.first_event_id),
         int(nevents_arg),
-        int(args.chunk_size) if hasattr(args, "chunk_size") else None,
+        int(args.chunk_size) if args.chunk_size is not None else None,
         base_seed,
-        Z=int(args.Z),
-        A=int(args.A),
+        Z=args.Z,
+        A=args.A,
+        nucleus=args.nucleus,
+        nucleus_database=Path(args.nucleus_database).resolve() if args.nucleus_database else None,
         mode=int(mode_arg),
         K=float(args.K),
         table_path=table_path,
@@ -644,8 +695,12 @@ def build_parser() -> argparse.ArgumentParser:
     pe = sp.add_parser("ehijing")
     spe = pe.add_subparsers(dest="sub", required=True)
     per = spe.add_parser("run")
-    per.add_argument("--Z", type=int, default=1)
-    per.add_argument("--A", type=int, default=2)
+    per.add_argument("--nucleus", default=None,
+                     help="Nucleus key in woods_saxon.yaml, e.g. d or C12 (default: d)")
+    per.add_argument("--nucleus-database", default=None,
+                     help="Override the nuclear parameter YAML; otherwise use eHIJING's database search")
+    per.add_argument("--Z", type=int, default=None, help="Legacy atomic number; requires --A")
+    per.add_argument("--A", type=int, default=None, help="Legacy mass number; requires --Z")
     per.add_argument("--medium-modification-mode", type=int, default=1,
                      help="Medium modification: 1 = Generalized Higher Twist (default), 0 = Higher Twist")
     per.add_argument("--K", type=float, default=4.0)
