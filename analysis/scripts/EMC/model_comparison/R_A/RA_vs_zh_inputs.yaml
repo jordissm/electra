@@ -7,18 +7,18 @@
       "samples": [
         {
           "nucleus": "C",
-          "nuclear": "../../../../output/data/EMC/model_comparison/R_A/C/ehijing.yoda",
-          "deuterium": "../../../../output/data/EMC/model_comparison/R_A/d/ehijing.yoda"
+          "nuclear": "../../../../output/data/EMC/model_comparison/R_A/C/ehijing-decays.yoda",
+          "deuterium": "../../../../output/data/EMC/model_comparison/R_A/d/ehijing-decays.yoda"
         },
         {
           "nucleus": "Cu",
-          "nuclear": "../../../../output/data/EMC/model_comparison/R_A/Cu/ehijing.yoda",
-          "deuterium": "../../../../output/data/EMC/model_comparison/R_A/d/ehijing.yoda"
+          "nuclear": "../../../../output/data/EMC/model_comparison/R_A/Cu/ehijing-decays.yoda",
+          "deuterium": "../../../../output/data/EMC/model_comparison/R_A/d/ehijing-decays.yoda"
         },
         {
           "nucleus": "Sn",
-          "nuclear": "../../../../output/data/EMC/model_comparison/R_A/Sn/ehijing.yoda",
-          "deuterium": "../../../../output/data/EMC/model_comparison/R_A/d/ehijing.yoda"
+          "nuclear": "../../../../output/data/EMC/model_comparison/R_A/Sn/ehijing-decays.yoda",
+          "deuterium": "../../../../output/data/EMC/model_comparison/R_A/d/ehijing-decays.yoda"
         }
       ]
     },

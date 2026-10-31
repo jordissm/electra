@@ -114,11 +114,11 @@ options are shared with the corresponding profile plotter.
 Model inputs are read from
 `analysis/output/data/<EXPERIMENT>/model_comparison/R_A/{d,<TARGET>}/` and figures
 are written to `analysis/output/plots/<EXPERIMENT>/model_comparison/R_A/`.
-The supplied configs compare `ehijing.yoda`, `ehijing-smash-decays-only.yoda`,
+The supplied configs compare `ehijing-decays.yoda`, `ehijing-smash-decays-only.yoda`,
 and `ehijing-smash-decays-collisions.yoda` using black dotted, dash-dot, and solid
-lines, respectively. The baseline filename follows the existing CLAS model
-input. Edit the explicit paths and labels if your sample uses another filename
-or decay treatment; the scripts do not infer that treatment from the baseline.
+lines, respectively. Edit the explicit paths and labels if your sample uses
+another filename or decay treatment; the scripts do not infer that treatment
+from the baseline.
 
 CLAS config entries use `deuterium` and a `nuclei` mapping, like HERMES. EMC
 entries use the `samples` format documented below: each target/deuterium pair

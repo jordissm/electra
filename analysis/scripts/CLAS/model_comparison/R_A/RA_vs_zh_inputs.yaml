@@ -13,11 +13,11 @@
       "label": "eHIJING",
       "linestyle": ":",
       "color": "black",
-      "deuterium": "../../../../output/data/CLAS/model_comparison/R_A/d/ehijing.yoda",
+      "deuterium": "../../../../output/data/CLAS/model_comparison/R_A/d/ehijing-decays.yoda",
       "nuclei": {
-        "C": "../../../../output/data/CLAS/model_comparison/R_A/C/ehijing.yoda",
-        "Fe": "../../../../output/data/CLAS/model_comparison/R_A/Fe/ehijing.yoda",
-        "Pb": "../../../../output/data/CLAS/model_comparison/R_A/Pb/ehijing.yoda"
+        "C": "../../../../output/data/CLAS/model_comparison/R_A/C/ehijing-decays.yoda",
+        "Fe": "../../../../output/data/CLAS/model_comparison/R_A/Fe/ehijing-decays.yoda",
+        "Pb": "../../../../output/data/CLAS/model_comparison/R_A/Pb/ehijing-decays.yoda"
       }
     },
     {
