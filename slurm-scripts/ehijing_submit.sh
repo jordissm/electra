@@ -62,7 +62,7 @@ if [[ ! -r "$NUCLEUS_DATABASE" ]]; then
 fi
 NUCLEUS_DATABASE="$(cd "$(dirname "$NUCLEUS_DATABASE")" && pwd -P)/$(basename "$NUCLEUS_DATABASE")"
 MED_MODIF_MODE="${MED_MODIF_MODE:-1}" # Generalized Higher Twist; 0 selects Higher Twist.
-K=4.0
+K="${K:-4.0}"
 # Optional runtime mode and overrides of the selected database parameters.
 NUCLEAR_ARGS=""
 if [[ -n "${NUCLEAR_TARGET:-}" ]]; then
